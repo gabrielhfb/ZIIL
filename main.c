@@ -9,6 +9,11 @@
 #define LARGURA_TELA 1200
 #define ALTURA_TELA 800
 
+#define PESSEGO \
+    (Color) { 255, 204, 197, 255 }
+#define MARROM \
+    (Color) { 153, 78, 0, 255 }
+
 typedef struct posicao
 {
     Vector2 atual;
@@ -23,6 +28,7 @@ typedef struct jogador
     int nro_vidas;
     int pontos;
     bool espada;
+    Texture2D textura[4];
 } JOGADOR;
 
 typedef struct monstro
@@ -30,14 +36,16 @@ typedef struct monstro
     POSICAO pos;
     int direcao;
     float velocidade;
+    Texture2D textura[4];
 } MONSTRO;
 
+
 Rectangle g_pedra = (Rectangle){
-            x: 200,
-            y: 200,
-            width: 50,
-            height: 50
-        };
+    x : 200,
+    y : 200,
+    width : 50,
+    height : 50
+};
 
 bool MovimentoEhLegal(POSICAO *pos, Vector2 mov)
 {
@@ -51,7 +59,7 @@ bool MovimentoEhLegal(POSICAO *pos, Vector2 mov)
     if (pos->atual.x + mov.x >= LARGURA_TELA || pos->atual.x + mov.x < 0 || pos->atual.y + mov.y >= ALTURA_TELA || pos->atual.y + mov.y < 0)
         permitido = false;
 
-    if (CheckCollisionPointRec((Vector2){x:(pos->atual.x + mov.x)+0.1, y: (pos->atual.y + mov.y)+0.1}, g_pedra))
+    if (CheckCollisionPointRec((Vector2){x : (pos->atual.x + mov.x) + 0.1, y : (pos->atual.y + mov.y) + 0.1}, g_pedra))
         permitido = false;
 
     return permitido;
@@ -86,6 +94,8 @@ void AlteraPosicaoDestino(POSICAO *pos, int *direcao_atual, int direcao_moviment
             pos->destino.y -= 50;
             *direcao_atual = N;
         }
+
+        //Ideia: Se direcao == N2, testa movimentacao em 100px
     }
 }
 
@@ -145,6 +155,80 @@ void MovimentaEntidade(POSICAO *pos, int direcao, float velocidade, float delta)
             if (pos->atual.y <= pos->destino.y)
                 pos->atual.y = pos->destino.y;
         }
+
+        
+    }
+}
+
+int MenuPrincipal(void)
+{
+    int escolha, altura_opcao = 40;
+    Rectangle retJOGAR = {80, 210, 165, altura_opcao};
+    Rectangle retCARREGAR = {80, 310, 275, altura_opcao};
+    Rectangle retRECORDES = {80, 410, 275, altura_opcao};
+    Rectangle retSAIR = {80, 510, 120, altura_opcao};
+
+    Texture2D hub = LoadTexture("assets/sprites/Menu_Zelda.png");
+
+    while (!WindowShouldClose())
+    {
+        if (IsKeyPressed(KEY_F11))
+        {
+            ToggleFullscreen();
+        }
+
+        BeginDrawing();
+
+        ClearBackground(PESSEGO);
+
+        DrawTexture(hub, 0, 0, RAYWHITE);
+
+        if (CheckCollisionPointRec(GetMousePosition(), retJOGAR))
+        {
+            DrawText("JOGAR", 80, 210, altura_opcao, GREEN);
+            if (IsMouseButtonPressed(0))
+            {
+                return 1;
+            }
+        }
+        else
+            DrawText("JOGAR", 80, 210, altura_opcao, MARROM);
+
+        if (CheckCollisionPointRec(GetMousePosition(), retCARREGAR))
+        {
+            DrawText("CARREGAR", 80, 310, altura_opcao, GREEN);
+            if (IsMouseButtonPressed(0))
+            {
+                return 2;
+            }
+        }
+        else
+            DrawText("CARREGAR", 80, 310, altura_opcao, MARROM);
+
+        if (CheckCollisionPointRec(GetMousePosition(), retRECORDES))
+        {
+            DrawText("RECORDES", 80, 410, altura_opcao, GREEN);
+            if (IsMouseButtonPressed(0))
+            {
+                return 3;
+            }
+        }
+        else
+            DrawText("RECORDES", 80, 410, altura_opcao, MARROM);
+
+        if (CheckCollisionPointRec(GetMousePosition(), retSAIR))
+        {
+            DrawText("SAIR", 80, 510, altura_opcao, GREEN);
+            if (IsMouseButtonPressed(0))
+            {
+                return 4;
+            }
+        }
+        else
+            DrawText("SAIR", 80, 510, altura_opcao, MARROM);
+        DrawText("Made by Brandeburski & Grilli", 640, 492, 29, BLACK);
+
+        EndDrawing();
     }
 }
 
@@ -153,106 +237,115 @@ void MovimentaEntidade(POSICAO *pos, int direcao, float velocidade, float delta)
 //------------------------------------------------------------------------------------
 int main(void)
 {
-    // Initialization
-    //--------------------------------------------------------------------------------------
+
     InitWindow(LARGURA_TELA, ALTURA_TELA, "ZIIL");
 
-    SetTargetFPS(60); // Set our game to run at 60 frames-per-second
+    SetTargetFPS(60);
 
-    JOGADOR link = (JOGADOR){
-        pos :
-            {
-                atual : (Vector2){x : 0, y : 0},
-                destino : (Vector2){x : 0, y : 0}
-            },
-        velocidade : 175.0,
-        direcao : S,
-        nro_vidas : 3
-    };
+    int escolha = MenuPrincipal();
 
-    MONSTRO monstro1 = (MONSTRO)
-    {
-    pos :
-            {
-                atual : (Vector2){x : 250, y : 200},
-                destino : (Vector2){x : 250, y : 200}
-            },
-        velocidade : 80.0,
-        direcao : S,
-    };
-
-    // Main game loop
-    while (!WindowShouldClose())
+    if (escolha == 1)
     {
 
-        float delta = GetFrameTime();
+        // Initialization
+        //--------------------------------------------------------------------------------------
+        // Set our game to run at 60 frames-per-second
 
-        BeginDrawing();
+        JOGADOR link = (JOGADOR){
+            pos :
+                {
+                    atual : (Vector2){x : 0, y : 0},
+                    destino : (Vector2){x : 0, y : 0}
+                },
+            velocidade : 175.0,
+            direcao : S,
+            nro_vidas : 3
+        };
 
-        if (IsKeyPressed(KEY_F11))
+        MONSTRO monstro1 = (MONSTRO){
+            pos :
+                {
+                    atual : (Vector2){x : 250, y : 200},
+                    destino : (Vector2){x : 250, y : 200}
+                },
+            velocidade : 80.0,
+            direcao : S,
+        };
+
+            Texture2D Link = LoadTexture("assets/sprites/Link_front.png");
+
+
+        // Main game loop
+        while (!WindowShouldClose())
         {
-            ToggleFullscreen();
+            if (IsKeyPressed(KEY_F11))
+            {
+                ToggleFullscreen();
+            }
+
+            float delta = GetFrameTime();
+
+            BeginDrawing();
+
+            ClearBackground(RAYWHITE);
+
+            TraduzInputJogador(&link.pos, &link.direcao);
+            MovimentaEntidade(&link.pos, link.direcao, link.velocidade, delta);
+
+            AlteraPosicaoDestino(&monstro1.pos, &monstro1.direcao, GetRandomValue(1, 38));
+            MovimentaEntidade(&monstro1.pos, monstro1.direcao, monstro1.velocidade, delta);
+
+            Rectangle ret_link = (Rectangle){
+                x : link.pos.atual.x,
+                y : link.pos.atual.y,
+                width : 50,
+                height : 50
+            };
+
+            Rectangle ret_monstroi = (Rectangle){
+                x : monstro1.pos.atual.x,
+                y : monstro1.pos.atual.y,
+                width : 50,
+                height : 50
+            };
+            
+            DrawTexture(Link, link.pos.atual.x, link.pos.atual.y, WHITE);
+            //DrawRectangleRec(ret_link, GREEN);
+            DrawRectangleRec(ret_monstroi, PURPLE);
+            DrawRectangleRec(g_pedra, BROWN);
+
+            char xat[10];
+            char yat[10];
+            char xdes[10];
+            char ydes[10];
+            sprintf(xat, "%0.5lf", link.pos.atual.x);
+            sprintf(yat, "%0.5lf", link.pos.atual.y);
+            sprintf(xdes, "%0.5lf", link.pos.destino.x);
+            sprintf(ydes, "%0.5lf", link.pos.destino.y);
+
+            DrawText(xat, 100, 100, 20, BLUE);
+            DrawText(yat, 300, 100, 20, BLUE);
+
+            DrawText(xdes, 100, 200, 20, GREEN);
+            DrawText(ydes, 300, 200, 20, GREEN);
+
+            if (IsKeyDown(KEY_RIGHT))
+                DrawText(">>", 450, 500, 30, ORANGE);
+            if (IsKeyDown(KEY_LEFT))
+                DrawText("<<", 350, 500, 30, ORANGE);
+            if (IsKeyDown(KEY_UP))
+                DrawText("^^", 400, 450, 40, ORANGE);
+            if (IsKeyDown(KEY_DOWN))
+                DrawText("vv", 400, 500, 30, ORANGE);
+
+            if (CheckCollisionRecs(ret_link, ret_monstroi))
+                DrawText("Colisão", 400, 550, 30, PURPLE);
+
+            EndDrawing();
+
+            //----------------------------------------------------------------------------------
         }
-
-        ClearBackground(RAYWHITE);
-
-        TraduzInputJogador(&link.pos, &link.direcao);
-        MovimentaEntidade(&link.pos, link.direcao, link.velocidade, delta);
-
-        AlteraPosicaoDestino(&monstro1.pos, &monstro1.direcao, GetRandomValue(1,4));
-        MovimentaEntidade(&monstro1.pos, monstro1.direcao, monstro1.velocidade, delta);
-
-        Rectangle ret_link = (Rectangle){
-            x: link.pos.atual.x,
-            y: link.pos.atual.y,
-            width: 50,
-            height: 50
-        };
-
-        Rectangle ret_monstroi = (Rectangle){
-            x: monstro1.pos.atual.x,
-            y: monstro1.pos.atual.y,
-            width: 50,
-            height: 50
-        };
-
-
-        DrawRectangleRec(ret_link, GREEN);
-        DrawRectangleRec(ret_monstroi, PURPLE);
-        DrawRectangleRec(g_pedra, BROWN);
-
-        char xat[10];
-        char yat[10];
-        char xdes[10];
-        char ydes[10];
-        sprintf(xat, "%0.5lf", link.pos.atual.x);
-        sprintf(yat, "%0.5lf", link.pos.atual.y);
-        sprintf(xdes, "%0.5lf", link.pos.destino.x);
-        sprintf(ydes, "%0.5lf", link.pos.destino.y);
-
-        DrawText(xat, 100, 100, 20, BLUE);
-        DrawText(yat, 300, 100, 20, BLUE);
-
-        DrawText(xdes, 100, 200, 20, GREEN);
-        DrawText(ydes, 300, 200, 20, GREEN);
-
-        if (IsKeyDown(KEY_RIGHT))
-            DrawText(">>", 450, 500, 30, ORANGE);
-        if (IsKeyDown(KEY_LEFT))
-            DrawText("<<", 350, 500, 30, ORANGE);
-        if (IsKeyDown(KEY_UP))
-            DrawText("^^", 400, 450, 40, ORANGE);
-        if (IsKeyDown(KEY_DOWN))
-            DrawText("vv", 400, 500, 30, ORANGE);
-
-        if (CheckCollisionRecs(ret_link, ret_monstroi))
-            DrawText("Colisão", 400, 550, 30, PURPLE);
-
-        EndDrawing();
-
-        //----------------------------------------------------------------------------------
     }
-
     // De-Initialization
     //--------------------------------------------------------------------------------------
     CloseWindow(); // Close window and OpenGL context
