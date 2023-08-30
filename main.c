@@ -11,10 +11,13 @@
 #define ALTURA_TELA 800
 #define ALTURA_BOTAO 40
 #define QUADRADO 50
-#define QUANT_PEDRAS 10
+#define QUANT_MAX_OBSTACULOS 10
 #define QUANT_MONSTROS 5
 #define DELAY_ESPADA 0.25
 #define COOLDOWN_ESPADA 2
+#define VELOCIDADE_MONSTRO 0
+#define LINHAS 16
+#define COLUNAS 24
 
 #define PESSEGO \
   (Color) { 255, 204, 197, 255 }
@@ -33,6 +36,7 @@ typedef struct jogador {
   int nro_vidas;
   int pontos;
   bool espada;
+  double cooldown_espada;
 } JOGADOR;
 
 typedef struct monstro {
@@ -42,19 +46,20 @@ typedef struct monstro {
   bool vivo;
 } MONSTRO;
 
-int posicao_pedras[QUANT_PEDRAS][2] = {
-    {200, 200},  {400, 400}, {600, 600}, {700, 350}, {100, 600},
-    {1000, 400}, {300, 450}, {500, 700}, {850, 300}, {950, 100}};
-int posicao_monstros[QUANT_MONSTROS][2] = {
-    {250, 200}, {500, 200}, {750, 200}, {1000, 200}, {400, 600}};
-int fase = 1;
+typedef struct mapa {
+  int quant_obstaculos;
+  Rectangle obstaculos[QUANT_MAX_OBSTACULOS];
+  int fase;
+  int quant_inicial_monstros;
+  Vector2 pos_inicial_monstros[QUANT_MONSTROS];
+} MAPA;
 
-Rectangle pedras[QUANT_PEDRAS];
-MONSTRO monstros[QUANT_MONSTROS];
-
-Texture2D espada_texturas[4];
-Texture2D monstro_texturas[4];
-Texture2D link_texturas[4];
+typedef struct texturas {
+  Texture2D espada[4];
+  Texture2D monstro_texturas[4];
+  Texture2D link_texturas[4];
+  Texture2D pedra;
+} TEXTURA;
 
 void IniciaJanela(void) {
   InitWindow(LARGURA_TELA, ALTURA_TELA, "ZIIL");
@@ -128,15 +133,78 @@ int menu(void) {
 
     if (escolha != 0) return escolha;
 
-    EndDrawing();  
+    EndDrawing();
   }
   return 4;
+}
+
+// Função que recebe o nome do arquivo nível e preenche uma matriz de
+// caracteres com o conteúdo. A rotina deve retornar o numero de monstros
+// presente no arquivo
+// Abertura e fechamento do arquivo nesta função
+int le_arquivo_nivel(char mat[][COLUNAS], char nome_arq[]) {
+  FILE *fp;
+  int i;
+  int j;
+  int contador_monstros = 0;
+
+  if (!(fp = fopen(nome_arq, "rb"))) {
+    printf("Erro na abertura do arquivo!");
+  } else {
+    for (i = 0; i < LINHAS; i++) {
+      for (j = 0; j < COLUNAS; j++) {
+        mat[i][j] = getc(fp);
+        if (mat[i][j] == 'M') contador_monstros++;
+      }
+      getc(fp);
+    }
+    fclose(fp);
+  }
+
+  return contador_monstros;
+}
+
+void carregaTexturas(TEXTURA *textura) {
+  textura->espada[0] = LoadTexture("assets/sprites/Attack_right.png");
+  textura->espada[1] = LoadTexture("assets/sprites/Attack_left.png");
+  textura->espada[2] = LoadTexture("assets/sprites/Attack_down.png");
+  textura->espada[3] = LoadTexture("assets/sprites/Attack_up.png");
+
+  textura->monstro_texturas[0] = LoadTexture("assets/sprites/Enemy_right.png");
+  textura->monstro_texturas[1] = LoadTexture("assets/sprites/Enemy_left.png");
+  textura->monstro_texturas[2] = LoadTexture("assets/sprites/Enemy_front.png");
+  textura->monstro_texturas[3] = LoadTexture("assets/sprites/Enemy_back.png");
+
+  textura->link_texturas[0] = LoadTexture("assets/sprites/Link_right.png");
+  textura->link_texturas[1] = LoadTexture("assets/sprites/Link_left.png");
+  textura->link_texturas[2] = LoadTexture("assets/sprites/Link_front.png");
+  textura->link_texturas[3] = LoadTexture("assets/sprites/Link_back.png");
+
+  textura->pedra = LoadTexture("assets/sprites/Obstacle.png");
+}
+
+void inicializaMonstro(MONSTRO monstros[], int quantidade,
+                       Vector2 pos_inicial[]) {
+  int i;
+
+  for (i = 0; i < quantidade; i++) {
+    monstros[i] = (MONSTRO){
+      pos : {
+        atual : (Vector2){x : pos_inicial[i].x, y : pos_inicial[i].y},
+        destino : (Vector2){x : pos_inicial[i].x, y : pos_inicial[i].y}
+      },
+      velocidade : VELOCIDADE_MONSTRO,
+      direcao : S,
+      vivo : true,
+    };
+  }
 }
 
 bool MovimentoEhLegal(POSICAO *pos, Vector2 mov) {
   // Dada a estrutura POSI��O (passada por refer�ncia) de uma entidade, e um
   // Vector2 correspondente ao movimento a ser realizado, retorna Verdadeiro se
   // o movimento pode ser realizado ou Falso caso contr�rio
+  // int i;
 
   // O movimento � permitido por padr�o,
   bool permitido = true;
@@ -146,16 +214,16 @@ bool MovimentoEhLegal(POSICAO *pos, Vector2 mov) {
   if (pos->atual.x + mov.x >= LARGURA_TELA || pos->atual.x + mov.x < 0 ||
       pos->atual.y + mov.y >= ALTURA_TELA || pos->atual.y + mov.y < 0) {
     permitido = false;
-  } else {
-    for (int i = 0; i < QUANT_PEDRAS; i++) {
+  } /*else {
+    for (i = 0; i < mapa.quant_obstaculos; i++) {
       if (CheckCollisionPointRec((Vector2){
             x : (pos->atual.x + mov.x) + 0.1,
             y : (pos->atual.y + mov.y) + 0.1
           },
-                                 pedras[i]))
+                                 mapa.obstaculos[i]))
         permitido = false;
     }
-  }
+  }*/
 
   return permitido;
 }
@@ -239,24 +307,26 @@ void MovimentaEntidade(POSICAO *pos, int direcao, float velocidade,
   }
 }
 
-void AtaqueEspada(double *cooldownEspada, bool *espada, int direcao,
-                  POSICAO pos, float delta, int *quant_monstros) {
-  int posX = pos.atual.x;
-  int posY = pos.atual.y;
+void AtaqueEspada(JOGADOR *link, int *quant_monstros, TEXTURA texturas,
+                  MONSTRO monstros[]) {
+  int delta = GetFrameTime();
 
-  if (IsKeyPressed(KEY_SPACE) || *espada == true) {
-    if (*cooldownEspada <= 0) {
-      if (direcao == 1)
+  int posX = link->pos.atual.x;
+  int posY = link->pos.atual.y;
+
+  if (IsKeyPressed(KEY_SPACE) || link->espada == true) {
+    if (link->cooldown_espada <= 0) {
+      if (link->direcao == 1)
         posX += 50;
-      else if (direcao == 2)
+      else if (link->direcao == 2)
         posX -= 50;
-      else if (direcao == 3)
+      else if (link->direcao == 3)
         posY += 50;
       else
         posY -= 50;
 
       Rectangle espada_hitbox = (Rectangle){posX, posY, 50, 50};
-      DrawTexture(espada_texturas[direcao - 1], posX, posY, WHITE);
+      DrawTexture(texturas.espada[link->direcao - 1], posX, posY, WHITE);
 
       for (int i = 0; i < QUANT_MONSTROS; i++)
         if (monstros[i].vivo == true)
@@ -267,20 +337,16 @@ void AtaqueEspada(double *cooldownEspada, bool *espada, int direcao,
             monstros[i].vivo = false;
             *quant_monstros -= 1;
           }
-      if (*quant_monstros == 0) {
-        fase += 1;
-        jogo();
-      }
 
-      *espada = true;
+      link->espada = true;
     }
 
-    *cooldownEspada -= delta;
+    link->cooldown_espada -= delta;
   }
 
-  if (*cooldownEspada <= -DELAY_ESPADA) {
-    *cooldownEspada = COOLDOWN_ESPADA;
-    *espada = false;
+  if (link->cooldown_espada <= -DELAY_ESPADA) {
+    link->cooldown_espada = COOLDOWN_ESPADA;
+    link->espada = false;
   }
 }
 
@@ -315,58 +381,37 @@ void MonstroSegueJogador(POSICAO *monstro_pos, int *monstro_direcao,
   }
 }
 
-void jogo() {
+void jogo(MAPA *dados_jogo) {
   int i;
-  double cooldownEspada = 0.0, cooldownColisao = 0.0;
-  int quant_monstros = QUANT_MONSTROS;
+  double cooldownColisao = 0.0;
+  int quant_monstros = dados_jogo->quant_inicial_monstros;
 
-  espada_texturas[0] = LoadTexture("assets/sprites/Attack_right.png");
-  espada_texturas[1] = LoadTexture("assets/sprites/Attack_left.png");
-  espada_texturas[2] = LoadTexture("assets/sprites/Attack_down.png");
-  espada_texturas[3] = LoadTexture("assets/sprites/Attack_up.png");
+  MONSTRO monstros[QUANT_MONSTROS];
+  TEXTURA texturas;
 
-  monstro_texturas[0] = LoadTexture("assets/sprites/Enemy_right.png");
-  monstro_texturas[1] = LoadTexture("assets/sprites/Enemy_left.png");
-  monstro_texturas[2] = LoadTexture("assets/sprites/Enemy_front.png");
-  monstro_texturas[3] = LoadTexture("assets/sprites/Enemy_back.png");
-
-  link_texturas[0] = LoadTexture("assets/sprites/Link_right.png");
-  link_texturas[1] = LoadTexture("assets/sprites/Link_left.png");
-  link_texturas[2] = LoadTexture("assets/sprites/Link_front.png");
-  link_texturas[3] = LoadTexture("assets/sprites/Link_back.png");
-
-  Texture2D pedra = LoadTexture("assets/sprites/Obstacle.png");
+  carregaTexturas(&texturas);
 
   JOGADOR link = (JOGADOR){
     pos : {atual : (Vector2){x : 0, y : 0}, destino : (Vector2){x : 0, y : 0}},
     velocidade : 350.0,
     direcao : S,
     nro_vidas : 3,
-    espada : false
+    espada : false,
+    cooldown_espada : 0.0
   };
 
-  for (int i = 0; i < QUANT_PEDRAS; i++) {
+  /*for (int i = 0; i < QUANT_PEDRAS; i++) {
     pedras[i] = (Rectangle){
       x : posicao_pedras[i][0],
       y : posicao_pedras[i][1],
       width : 50,
       height : 50
     };
-  }
+  }*/
 
-  for (i = 0; i < QUANT_MONSTROS; i++) {
-    monstros[i] = (MONSTRO){
-      pos : {
-        atual :
-            (Vector2){x : posicao_monstros[i][0], y : posicao_monstros[i][1]},
-        destino :
-            (Vector2){x : posicao_monstros[i][0], y : posicao_monstros[i][1]}
-      },
-      velocidade : 0.0,
-      direcao : S,
-      vivo : true,
-    };
-  }
+  inicializaMonstro(monstros, dados_jogo->quant_inicial_monstros,
+                    dados_jogo->pos_inicial_monstros);
+
   // Main game loop
   while (!WindowShouldClose()) {
     float delta = GetFrameTime();
@@ -376,9 +421,8 @@ void jogo() {
 
     TraduzInputJogador(&link.pos, &link.direcao);
     MovimentaEntidade(&link.pos, link.direcao, link.velocidade, delta);
-    AtaqueEspada(&cooldownEspada, &link.espada, link.direcao, link.pos, delta,
-                 &quant_monstros);
-    DrawTexture(link_texturas[link.direcao - 1], link.pos.atual.x,
+    AtaqueEspada(&link, &quant_monstros, texturas, monstros);
+    DrawTexture(texturas.link_texturas[link.direcao - 1], link.pos.atual.x,
                 link.pos.atual.y, WHITE);
 
     Rectangle ret_link = (Rectangle){
@@ -388,9 +432,9 @@ void jogo() {
       height : QUADRADO
     };
 
-    if (cooldownEspada > 0) cooldownEspada -= delta;
+    if (link.cooldown_espada > 0) link.cooldown_espada -= delta;
 
-    for (i = 0; i < QUANT_MONSTROS; i++) {
+    for (i = 0; i < quant_monstros; i++) {
       if (monstros[i].vivo) {
         if (abs(monstros[i].pos.atual.x - link.pos.atual.x) < 800 &&
             abs(monstros[i].pos.atual.y - link.pos.atual.y) < 800 &&
@@ -404,7 +448,7 @@ void jogo() {
 
         MovimentaEntidade(&monstros[i].pos, monstros[i].direcao,
                           monstros[i].velocidade, delta);
-        DrawTexture(monstro_texturas[monstros[i].direcao - 1],
+        DrawTexture(texturas.monstro_texturas[monstros[i].direcao - 1],
                     monstros[i].pos.atual.x, monstros[i].pos.atual.y, WHITE);
 
         if (CheckCollisionRecs(ret_link, (Rectangle){monstros[i].pos.atual.x,
@@ -420,19 +464,25 @@ void jogo() {
       }
     }
 
-    DrawTexture(link_texturas[link.direcao - 1], link.pos.atual.x,
+    DrawTexture(texturas.link_texturas[link.direcao - 1], link.pos.atual.x,
                 link.pos.atual.y, WHITE);
 
-    for (int i = 0; i < QUANT_PEDRAS; i++) {
-      DrawTexture(pedra, pedras[i].x, pedras[i].y, WHITE);
+    for (int i = 0; i < dados_jogo->quant_obstaculos; i++) {
+      DrawTexture(texturas.pedra, dados_jogo->obstaculos[i].x,
+                  dados_jogo->obstaculos[i].y, WHITE);
     }
 
+    /*if (quant_monstros == 0) {
+      dados_jogo.fase += 1;
+      jogo();
+    }*/
+
     DrawText(TextFormat("Vidas: %d", link.nro_vidas), 100, 50, 20, VIOLET);
-    DrawText(TextFormat("FASE: %d", fase), 100, 70, 20, VIOLET);
+    DrawText(TextFormat("FASE: %d", dados_jogo->fase), 100, 70, 20, VIOLET);
 
     if (IsKeyDown(KEY_ENTER)) {
-      for (int i = 0; i < QUANT_PEDRAS; i++) {
-        pedras[i] = (Rectangle){
+      for (int i = 0; i < QUANT_MAX_OBSTACULOS; i++) {
+        dados_jogo->obstaculos[i] = (Rectangle){
           x : GetRandomValue(0, (LARGURA_TELA - 50) / 50) * 50,
           y : GetRandomValue(0, (ALTURA_TELA - 50) / 50) * 50,
           width : 50,
@@ -450,10 +500,21 @@ void jogo() {
 int main() {
   IniciaJanela();
   int escolha = 0;
+  char configuracao_inicial_grid[LINHAS][COLUNAS];
 
   escolha = menu();
+
+  MAPA jogo_dados = (MAPA){
+    quant_obstaculos : 1,
+    obstaculos :
+        {(Rectangle){x : 300, y : 400, width : QUADRADO, height : QUADRADO}},
+    fase : 1,
+    quant_inicial_monstros : 1,
+    pos_inicial_monstros : {(Vector2){x : 600, y : 700}},
+  };
+
   if (escolha == 1) {
-    jogo();
+    jogo(&jogo_dados);
   }
   if (escolha == 4) {
     CloseWindow();
