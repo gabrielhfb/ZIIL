@@ -346,8 +346,7 @@ void MovimentaEntidade(POSICAO *pos, int direcao, float velocidade,
 }
 
 void AtaqueEspada(JOGADOR *link, int *quant_monstros, TEXTURA texturas,
-                  MONSTRO monstros[]) {
-  int delta = GetFrameTime();
+                  MONSTRO monstros[], float delta) {
 
   int posX = link->pos.atual.x;
   int posY = link->pos.atual.y;
@@ -439,7 +438,7 @@ int jogo(MAPA *dados) {
     MovimentaEntidade(&dados->jogador.pos, dados->jogador.direcao,
                       dados->jogador.velocidade, delta);
     AtaqueEspada(&dados->jogador, &dados->quant_monstros, texturas,
-                 dados->monstros);
+                 dados->monstros, delta);
     DrawTexture(texturas.link_texturas[dados->jogador.direcao - 1],
                 dados->jogador.pos.atual.x, dados->jogador.pos.atual.y, WHITE);
 
