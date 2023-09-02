@@ -12,11 +12,11 @@
 #define ALTURA_TELA 800
 #define ALTURA_BOTAO 40
 #define QUADRADO 50
-#define QUANT_MAX_OBSTACULOS 10
-#define QUANT_MONSTROS 5
+#define QUANT_MAX_OBSTACULOS 50
+#define QUANT_MAX_MONSTROS 10
 #define DELAY_ESPADA 0.25
 #define COOLDOWN_ESPADA 2
-#define VELOCIDADE_MONSTRO 0
+#define VELOCIDADE_MONSTRO 100
 #define VELOCIDADE_JOGADOR 145
 #define LINHAS 16
 #define COLUNAS 24
@@ -31,6 +31,11 @@ typedef struct posicao {
   Vector2 atual;
   Vector2 destino;
 } POSICAO;
+
+typedef struct highscore {
+  char nome[45];
+  int pontos;
+} RECORDE;
 
 typedef struct jogador {
   POSICAO pos;
@@ -54,7 +59,7 @@ typedef struct mapa {
   Rectangle obstaculos[QUANT_MAX_OBSTACULOS];
   int fase;
   int quant_monstros;
-  MONSTRO monstros[QUANT_MONSTROS];
+  MONSTRO monstros[QUANT_MAX_MONSTROS];
   JOGADOR jogador;
   int pontuacao;
 } MAPA;
@@ -71,8 +76,58 @@ void IniciaJanela(void) {
   SetTargetFPS(60);
 }
 
-void checaTelaCheia() {
+void checaTelaCheia(void) {
   if (IsKeyPressed(KEY_F11)) ToggleFullscreen();
+}
+
+// Recebe o nome do arquivo a ser lido (ler no main) e armazena o
+// conteúdo no array top5
+// Abre e fecha o arquivo dentro desta função
+// Retorna TRUE em caso de sucesso e FALSE no caso contrário
+int le_arquivo(RECORDE top5[5]) {
+  int sucesso = true;
+  FILE *fp;
+
+  if (!(fp = fopen("assets/top5.bin", "rb"))) {
+    printf("Erro na abertura do arquivo!");
+    sucesso = false;
+  } else {
+    if (fread(top5, sizeof(RECORDE), 5, fp) != 5) {
+      printf("Erro na leitura");
+      sucesso = false;
+    }
+  }
+  fclose(fp);
+
+  return sucesso;
+}
+
+// Recebe o nome do arquivo a ser escrito e armazena o
+// conteúdo do array top5
+// Abre e fecha o arquivo dentro desta função
+// Retorna TRUE em caso de sucesso e FALSE no caso contrário
+int salva_arquivo(RECORDE top5[5]) {
+  int sucesso = true;
+  FILE *fp;
+
+  if (!(fp = fopen("assets/top5.bin", "wb"))) {
+    printf("Erro na abertura do arquivo!");
+    sucesso = false;
+  } else {
+    if (fwrite(&top5, sizeof(RECORDE), 5, fp) != 5) {
+      printf("Erro na escrita");
+      sucesso = false;
+    }
+  }
+  fclose(fp);
+
+  return sucesso;
+}
+
+// Troca no array as informações do jogador na posição posicao pelas informações
+// do novo jogador novoj
+void troca_info_array(RECORDE top5[], RECORDE novor, int posicao) {
+  top5[posicao] = novor;
 }
 
 Color defineCorBotaoMenu(Rectangle botao) {
@@ -108,6 +163,7 @@ int menu(void) {
   Texture2D hub = LoadTexture("assets/sprites/Menu_Zelda.png");
 
   while (!WindowShouldClose()) {
+    checaTelaCheia();
     BeginDrawing();
     ClearBackground(PESSEGO);
     DrawTexture(hub, 0, 0, RAYWHITE);
@@ -143,6 +199,38 @@ int menu(void) {
   return 4;
 }
 
+bool carregaJogo(MAPA *dados){
+  bool sucesso = true;
+  FILE *fp;
+
+  if (!(fp = fopen("assets/save.bin", "rb"))) {
+    printf("Erro na abertura do arquivo!");
+    sucesso = false;
+  } else {
+    if (fread(dados, sizeof(MAPA), 1, fp) != 1) {
+      printf("Erro na escrita");
+      sucesso = false;
+    }
+  }
+  fclose(fp);
+}
+
+bool salvaJogo(MAPA *dados){
+  bool sucesso = true;
+  FILE *fp;
+
+  if (!(fp = fopen("assets/save.bin", "wb"))) {
+    printf("Erro na abertura do arquivo!");
+    sucesso = false;
+  } else {
+    if (fwrite(dados, sizeof(MAPA), 1, fp) != 1) {
+      printf("Erro na leitura");
+      sucesso = false;
+    }
+  }
+  fclose(fp);
+}
+
 void inicializaMonstro(MONSTRO monstros[], int indice, int x, int y) {
   monstros[indice] = (MONSTRO){
     pos : {
@@ -166,22 +254,26 @@ void le_arquivo_nivel(char mat[][COLUNAS], int nivel) {
       strcpy(nome_arq, "assets/niveis/nivel1.txt");
       break;
     case 2:
-      strcpy(nome_arq, "nivel2.txt");
+      strcpy(nome_arq, "assets/niveis/nivel2.txt");
       break;
   }
 
   if (!(fp = fopen(nome_arq, "rb"))) {
     printf("Erro na abertura do arquivo!");
   } else {
-    for (i = 0; i < LINHAS; i++)
-      for (j = 0; j < COLUNAS; j++) mat[i][j] = getc(fp);
+    for (i = 0; i < LINHAS; i++) {
+      for (j = 0; j < COLUNAS; j++) {
+        mat[i][j] = getc(fp);
+      }
+      getc(fp);
+    }
+    fclose(fp);
   }
-  fclose(fp);
 }
 
 void monta_mapa(char mat[][COLUNAS], MAPA *dados_jogo) {
   int i, j;
-
+  dados_jogo->pontuacao = 0;
   dados_jogo->quant_monstros = 0;
   dados_jogo->quant_obstaculos = 0;
 
@@ -346,8 +438,7 @@ void MovimentaEntidade(POSICAO *pos, int direcao, float velocidade,
 }
 
 void AtaqueEspada(JOGADOR *link, int *quant_monstros, TEXTURA texturas,
-                  MONSTRO monstros[], float delta) {
-
+                  MONSTRO monstros[], float delta, MAPA *dados) {
   int posX = link->pos.atual.x;
   int posY = link->pos.atual.y;
 
@@ -364,8 +455,8 @@ void AtaqueEspada(JOGADOR *link, int *quant_monstros, TEXTURA texturas,
 
       Rectangle espada_hitbox = (Rectangle){posX, posY, 50, 50};
       DrawTexture(texturas.espada[link->direcao - 1], posX, posY, WHITE);
-
-      for (int i = 0; i < QUANT_MONSTROS; i++)
+      
+      for (int i = 0; i < QUANT_MAX_MONSTROS; i++)
         if (monstros[i].vivo == true)
           if (CheckCollisionRecs(
                   espada_hitbox,
@@ -373,6 +464,7 @@ void AtaqueEspada(JOGADOR *link, int *quant_monstros, TEXTURA texturas,
                               50, 50})) {
             monstros[i].vivo = false;
             *quant_monstros -= 1;
+            dados->pontuacao += 100;
           }
 
       link->espada = true;
@@ -419,10 +511,10 @@ void MonstroSegueJogador(POSICAO *monstro_pos, int *monstro_direcao,
   }
 }
 
-int jogo(MAPA *dados) {
+int jogo(MAPA *dj) {
   int i;
   double cooldownColisao = 0.0;
-
+  int quantidade_inicial_monstros = dj->quant_monstros;
   TEXTURA texturas;
 
   carregaTexturas(&texturas);
@@ -430,56 +522,57 @@ int jogo(MAPA *dados) {
   // Main game loop
   while (!WindowShouldClose()) {
     float delta = GetFrameTime();
-
+    checaTelaCheia();
     BeginDrawing();
     ClearBackground((Color){253, 217, 169, 255});
 
-    TraduzInputJogador(&dados->jogador.pos, &dados->jogador.direcao, dados);
-    MovimentaEntidade(&dados->jogador.pos, dados->jogador.direcao,
-                      dados->jogador.velocidade, delta);
-    AtaqueEspada(&dados->jogador, &dados->quant_monstros, texturas,
-                 dados->monstros, delta);
-    DrawTexture(texturas.link_texturas[dados->jogador.direcao - 1],
-                dados->jogador.pos.atual.x, dados->jogador.pos.atual.y, WHITE);
+    TraduzInputJogador(&dj->jogador.pos, &dj->jogador.direcao, dj);
+    MovimentaEntidade(&dj->jogador.pos, dj->jogador.direcao,
+                      dj->jogador.velocidade, delta);
+
+    DrawTexture(texturas.link_texturas[dj->jogador.direcao - 1],
+                dj->jogador.pos.atual.x, dj->jogador.pos.atual.y, WHITE);
 
     Rectangle ret_link = (Rectangle){
-      x : dados->jogador.pos.atual.x,
-      y : dados->jogador.pos.atual.y,
+      x : dj->jogador.pos.atual.x,
+      y : dj->jogador.pos.atual.y,
       width : QUADRADO,
       height : QUADRADO
     };
 
-    if (dados->jogador.cooldown_espada > 0)
-      dados->jogador.cooldown_espada -= delta;
+    if (dj->jogador.cooldown_espada > 0)
+      dj->jogador.cooldown_espada -= delta;
 
-    for (i = 0; i < dados->quant_monstros; i++) {
-      if (dados->monstros[i].vivo) {
-        if (abs(dados->monstros[i].pos.atual.x - dados->jogador.pos.atual.x) <
+
+
+    for (i = 0; i < quantidade_inicial_monstros; i++) {
+      if (dj->monstros[i].vivo) {
+        if (abs(dj->monstros[i].pos.atual.x - dj->jogador.pos.atual.x) <
                 800 &&
-            abs(dados->monstros[i].pos.atual.y - dados->jogador.pos.atual.y) <
+            abs(dj->monstros[i].pos.atual.y - dj->jogador.pos.atual.y) <
                 800 &&
             cooldownColisao <= 0) {
-          MonstroSegueJogador(&dados->monstros[i].pos,
-                              &dados->monstros[i].direcao, dados->jogador.pos,
-                              delta, dados);
+          MonstroSegueJogador(&dj->monstros[i].pos,
+                              &dj->monstros[i].direcao, dj->jogador.pos,
+                              delta, dj);
         } else {
-          AlteraPosicaoDestino(&dados->monstros[i].pos,
-                               &dados->monstros[i].direcao,
-                               GetRandomValue(1, 4), dados);
+          AlteraPosicaoDestino(&dj->monstros[i].pos,
+                               &dj->monstros[i].direcao,
+                               GetRandomValue(1, 4), dj);
         }
 
-        MovimentaEntidade(&dados->monstros[i].pos, dados->monstros[i].direcao,
-                          dados->monstros[i].velocidade, delta);
-        DrawTexture(texturas.monstro_texturas[dados->monstros[i].direcao - 1],
-                    dados->monstros[i].pos.atual.x,
-                    dados->monstros[i].pos.atual.y, WHITE);
+        MovimentaEntidade(&dj->monstros[i].pos, dj->monstros[i].direcao,
+                          dj->monstros[i].velocidade, delta);
+        DrawTexture(texturas.monstro_texturas[dj->monstros[i].direcao - 1],
+                    dj->monstros[i].pos.atual.x,
+                    dj->monstros[i].pos.atual.y, WHITE);
 
         if (CheckCollisionRecs(
-                ret_link, (Rectangle){dados->monstros[i].pos.atual.x,
-                                      dados->monstros[i].pos.atual.y, QUADRADO,
+                ret_link, (Rectangle){dj->monstros[i].pos.atual.x,
+                                      dj->monstros[i].pos.atual.y, QUADRADO,
                                       QUADRADO}) &&
             cooldownColisao <= 0) {
-          dados->jogador.nro_vidas--;
+          dj->jogador.nro_vidas--;
           cooldownColisao = 15;
 
           DrawText("Colis�o", 400, 550, 30, PURPLE);
@@ -487,22 +580,25 @@ int jogo(MAPA *dados) {
           cooldownColisao -= delta;
       }
     }
+    AtaqueEspada(&dj->jogador, &dj->quant_monstros, texturas,
+                 dj->monstros, delta, dj);
+    DrawTexture(texturas.link_texturas[dj->jogador.direcao - 1],
+                  dj->jogador.pos.atual.x, dj->jogador.pos.atual.y,
+                  WHITE);
 
-    DrawTexture(texturas.link_texturas[dados->jogador.direcao - 1],
-                dados->jogador.pos.atual.x, dados->jogador.pos.atual.y, WHITE);
-
-    for (int i = 0; i < dados->quant_obstaculos; i++) {
-      DrawTexture(texturas.pedra, dados->obstaculos[i].x,
-                  dados->obstaculos[i].y, WHITE);
+    for (int i = 0; i < dj->quant_obstaculos; i++) {
+      DrawTexture(texturas.pedra, dj->obstaculos[i].x,
+                  dj->obstaculos[i].y, WHITE);
     }
 
-    DrawText(TextFormat("Vidas: %d", dados->jogador.nro_vidas), 100, 50, 20,
+    DrawText(TextFormat("Vidas: %d", dj->jogador.nro_vidas), 100, 50, 20,
              VIOLET);
-    DrawText(TextFormat("FASE: %d", dados->fase), 100, 70, 20, VIOLET);
+    DrawText(TextFormat("FASE: %d", dj->fase), 100, 70, 20, VIOLET);
+    DrawText(TextFormat("Pontos: %d", dj->pontuacao), 100, 90, 20, VIOLET);
 
     if (IsKeyDown(KEY_ENTER)) {
-      for (int i = 0; i < QUANT_MAX_OBSTACULOS; i++) {
-        dados->obstaculos[i] = (Rectangle){
+      for (int i = 0; i < dj->quant_obstaculos; i++) {
+        dj->obstaculos[i] = (Rectangle){
           x : GetRandomValue(0, (LARGURA_TELA - 50) / 50) * 50,
           y : GetRandomValue(0, (ALTURA_TELA - 50) / 50) * 50,
           width : 50,
@@ -511,25 +607,28 @@ int jogo(MAPA *dados) {
       }
     }
 
-    if (dados->quant_monstros <= 0) {
-      dados->fase++;
+    if (dj->quant_monstros <= 0) {
+      dj->fase++;
       return 1;
     }
-    if (dados->jogador.nro_vidas <= 0) {
+    if (dj->jogador.nro_vidas <= 0) {
       return 0;
+    }
+    if(IsKeyPressed(KEY_L)){
+      salvaJogo(dj);
     }
 
     EndDrawing();
   }
-
-  CloseWindow();
 }
 
 int main() {
-  int nivel;
   MAPA dados_jogo;
   char grid[LINHAS][COLUNAS];
   int continua = 1;
+  RECORDE top5[5];
+
+  le_arquivo(top5);
 
   IniciaJanela();
   int escolha = 0;
@@ -543,10 +642,9 @@ int main() {
       monta_mapa(grid, &dados_jogo);
       do {
         continua = jogo(&dados_jogo);
-        if(dados_jogo.fase > NUM_FASES){
-          printf("Vitória");
+        if (dados_jogo.fase > NUM_FASES) {
+          CloseWindow();
         }
-
 
         else if (continua == 1) {
           le_arquivo_nivel(grid, dados_jogo.fase);
@@ -554,7 +652,25 @@ int main() {
         }
 
         else if (continua == 0) {
-          printf("gameover");
+          CloseWindow();
+        }
+      } while (continua);
+    }
+    if(escolha == 2){
+      carregaJogo(&dados_jogo);
+      do {
+        continua = jogo(&dados_jogo);
+        if (dados_jogo.fase > NUM_FASES) {
+          CloseWindow();
+        }
+
+        else if (continua == 1) {
+          le_arquivo_nivel(grid, dados_jogo.fase);
+          monta_mapa(grid, &dados_jogo);
+        }
+
+        else if (continua == 0) {
+          CloseWindow();
         }
       } while (continua);
     }
