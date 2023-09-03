@@ -550,45 +550,63 @@ void MovimentaEntidade(POSICAO *pos, int direcao, float velocidade,
   }
 }
 
-void AtaqueEspada(JOGADOR *link, int *quant_monstros, TEXTURA texturas,
-                  MONSTRO monstros[], float delta, MAPA *dados) {
-  int posX = link->pos.atual.x;
-  int posY = link->pos.atual.y;
+/* Dado o array de texturas, o delta time e o MAPA do jogo, coordena os ataques
+ * da espada */
+void AtaqueEspada(TEXTURA texturas, float delta, MAPA *dados) {
+  int posX = dados->jogador.pos.atual.x;
+  int posY = dados->jogador.pos.atual.y;
 
-  if (IsKeyPressed(KEY_SPACE) || link->espada == true) {
-    if (link->cooldown_espada <= 0) {
-      if (link->direcao == 1)
-        posX += 50;
-      else if (link->direcao == 2)
-        posX -= 50;
-      else if (link->direcao == 3)
-        posY += 50;
+  /* se a tecla espaço for pressionada ou a condição espada estiver
+   * ativa */
+  if (IsKeyPressed(KEY_SPACE) || dados->jogador.espada == true) {
+    /* Se o período de cooldown da espada já passou */
+    if (dados->jogador.cooldown_espada <= 0) {
+      /* altera as variáveis posX e posY de acordo com a direção que o jogador
+       * está virado */
+      if (dados->jogador.direcao == 1)
+        posX += QUADRADO;
+      else if (dados->jogador.direcao == 2)
+        posX -= QUADRADO;
+      else if (dados->jogador.direcao == 3)
+        posY += QUADRADO;
       else
-        posY -= 50;
+        posY -= QUADRADO;
 
-      Rectangle espada_hitbox = (Rectangle){posX, posY, 50, 50};
-      DrawTexture(texturas.espada[link->direcao - 1], posX, posY, WHITE);
+      /* Cria um retângulo com a posX ou posY deslocadas deslocadas de acordo
+       * com o condicional acima, e desenha a textura da espada nesse retângulo
+       */
+      Rectangle espada_hitbox = (Rectangle){posX, posY, QUADRADO, QUADRADO};
+      DrawTexture(texturas.espada[dados->jogador.direcao - 1], posX, posY,
+                  WHITE);
 
+      /* Verifica monstro a monstro se eles estão na área de colisão da espada.
+       * Se sim, troca o estado para morto, diminui o contador de monstros e
+       * aumenta a pontuação */
       for (int i = 0; i < QUANT_MAX_MONSTROS; i++)
-        if (monstros[i].vivo == true)
-          if (CheckCollisionRecs(
-                  espada_hitbox,
-                  (Rectangle){monstros[i].pos.atual.x, monstros[i].pos.atual.y,
-                              50, 50})) {
-            monstros[i].vivo = false;
-            *quant_monstros -= 1;
+        if (dados->monstros[i].vivo == true)
+          if (CheckCollisionRecs(espada_hitbox,
+                                 (Rectangle){dados->monstros[i].pos.atual.x,
+                                             dados->monstros[i].pos.atual.y,
+                                             QUADRADO, QUADRADO})) {
+            dados->monstros[i].vivo = false;
+            dados->quant_monstros -= 1;
             dados->pontuacao += 100;
           }
 
-      link->espada = true;
+      /* torna a condição espada verdadeira */
+      dados->jogador.espada = true;
     }
 
-    link->cooldown_espada -= delta;
+    /* Diminui a variável cooldown da espada a cada frame que se passa */
+    dados->jogador.cooldown_espada -= delta;
   }
 
-  if (link->cooldown_espada <= -DELAY_ESPADA) {
-    link->cooldown_espada = COOLDOWN_ESPADA;
-    link->espada = false;
+  /* Se o período que a espada deve ficar ativada após apertar espaço já passou,
+   * passa para a variável de cooldown o tempo que deve ser esperado até que ela
+   * possa ser usada novamente, e desativa a espada*/
+  if (dados->jogador.cooldown_espada <= -DELAY_ESPADA) {
+    dados->jogador.cooldown_espada = COOLDOWN_ESPADA;
+    dados->jogador.espada = false;
   }
 }
 
@@ -657,7 +675,7 @@ void checaColisaoMonstroJogador(MONSTRO monstros[], int *nro_vidas,
                                                  QUADRADO, QUADRADO}) &&
         cooldownColisao <= 0) {
       *nro_vidas--;
-      cooldownColisao = 15;
+      *cooldownColisao = 15.0;
 
       DrawText("Colis�o", 400, 550, 30, PURPLE);
     } else if (cooldownColisao > 0)
@@ -694,13 +712,12 @@ int jogo(MAPA *dj) {
 
     if (dj->jogador.cooldown_espada > 0) dj->jogador.cooldown_espada -= delta;
 
-    movimentaMonstro(&dj->monstros, dj->jogador, texturas,
+    movimentaMonstro(dj->monstros, dj->jogador, texturas,
                      dj->quant_inicial_monstros, cooldownColisao, delta, dj);
-    checaColisaoMonstroJogador(dj->monstros, &dj->jogador.nro_vidas, ret_link,
+    checaColisaoMonstroJogador(dj->monstros, dj->jogador.nro_vidas, ret_link,
                                &cooldownColisao, delta,
                                dj->quant_inicial_monstros);
-    AtaqueEspada(&dj->jogador, &dj->quant_monstros, texturas, dj->monstros,
-                 delta, dj);
+    AtaqueEspada(texturas, delta, dj);
     DrawTexture(texturas.link_texturas[dj->jogador.direcao - 1],
                 dj->jogador.pos.atual.x, dj->jogador.pos.atual.y, WHITE);
 
@@ -800,8 +817,8 @@ int main() {
         }
 
         else if (resultado == 0) {
-          if (posicao_pontuacao =
-                  ehPontuaçãoRecorde(top5, dados_jogo.pontuacao)) {
+          if ((posicao_pontuacao =
+                   ehPontuaçãoRecorde(top5, dados_jogo.pontuacao))) {
             printf("Insira seu nome");
           }
           printf("Derrota");
@@ -815,8 +832,8 @@ int main() {
       do {
         resultado = jogo(&dados_jogo);
         if (dados_jogo.fase > NUM_FASES) {
-          if (posicao_pontuacao =
-                  ehPontuaçãoRecorde(top5, dados_jogo.pontuacao)) {
+          if ((posicao_pontuacao =
+                   ehPontuaçãoRecorde(top5, dados_jogo.pontuacao))) {
             printf("Insira seu nome");
           }
           printf("Vitória");
@@ -829,8 +846,8 @@ int main() {
         }
 
         else if (resultado == 0) {
-          if (posicao_pontuacao =
-                  ehPontuaçãoRecorde(top5, dados_jogo.pontuacao)) {
+          if ((posicao_pontuacao =
+                   ehPontuaçãoRecorde(top5, dados_jogo.pontuacao))) {
             printf("Insira seu nome");
           }
           printf("Derrota");
