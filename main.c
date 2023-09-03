@@ -161,7 +161,9 @@ int menu(void) {
   Rectangle botaoSAIR = {80, 510, 120, ALTURA_BOTAO};
 
   Texture2D hub = LoadTexture("assets/sprites/Menu_Zelda.png");
+  Sound tema;
 
+  tema = LoadSound("assets/sons/tema.mp3");
   while (!WindowShouldClose()) {
     checaTelaCheia();
     BeginDrawing();
@@ -192,14 +194,19 @@ int menu(void) {
       escolha = 4;
     }
 
-    if (escolha != 0) return escolha;
-
+    if (escolha != 0) {
+      StopSound(tema);
+      return escolha;
+    }
+    if (!IsSoundPlaying(tema)) {
+      PlaySound(tema);
+    }
     EndDrawing();
   }
   return 4;
 }
 
-bool carregaJogo(MAPA *dados){
+bool carregaJogo(MAPA *dados) {
   bool sucesso = true;
   FILE *fp;
 
@@ -212,10 +219,12 @@ bool carregaJogo(MAPA *dados){
       sucesso = false;
     }
   }
+
   fclose(fp);
+  return sucesso;
 }
 
-bool salvaJogo(MAPA *dados){
+bool salvaJogo(MAPA *dados) {
   bool sucesso = true;
   FILE *fp;
 
@@ -229,6 +238,45 @@ bool salvaJogo(MAPA *dados){
     }
   }
   fclose(fp);
+  return sucesso;
+}
+int mostraRecordes(RECORDE recordes[]) {
+  Texture2D hub = LoadTexture("assets/sprites/Menu_Zelda.png");
+  char pontos[30];
+  Sound tema;
+
+  tema = LoadSound("assets/sons/tema.mp3");
+  while (!WindowShouldClose()) {
+    checaTelaCheia();
+    BeginDrawing();
+    ClearBackground(PESSEGO);
+    DrawTexture(hub, 0, 0, RAYWHITE);
+
+    DrawText(recordes[0].nome, 80, 150, 30, GOLD);
+    sprintf(pontos, "%d", recordes[0].pontos);
+    DrawText(pontos, 100, 200, 30, GOLD);
+
+    DrawText(recordes[1].nome, 80, 250, 30, GRAY);
+    sprintf(pontos, "%d", recordes[1].pontos);
+    DrawText(pontos, 100, 300, 30, GRAY);
+
+    DrawText(recordes[2].nome, 80, 350, 30, BROWN);
+    sprintf(pontos, "%d", recordes[2].pontos);
+    DrawText(pontos, 100, 400, 30, BROWN);
+
+    DrawText(recordes[3].nome, 80, 450, 30, BLUE);
+    sprintf(pontos, "%d", recordes[3].pontos);
+    DrawText(pontos, 100, 500, 30, BLUE);
+
+    DrawText(recordes[4].nome, 80, 550, 30, BLUE);
+    sprintf(pontos, "%d", recordes[4].pontos);
+    DrawText(pontos, 100, 600, 30, BLUE);
+    if (!IsSoundPlaying(tema)) {
+      PlaySound(tema);
+    }
+    EndDrawing();
+  }
+  StopSound(tema);
 }
 
 void inicializaMonstro(MONSTRO monstros[], int indice, int x, int y) {
@@ -455,7 +503,7 @@ void AtaqueEspada(JOGADOR *link, int *quant_monstros, TEXTURA texturas,
 
       Rectangle espada_hitbox = (Rectangle){posX, posY, 50, 50};
       DrawTexture(texturas.espada[link->direcao - 1], posX, posY, WHITE);
-      
+
       for (int i = 0; i < QUANT_MAX_MONSTROS; i++)
         if (monstros[i].vivo == true)
           if (CheckCollisionRecs(
@@ -540,37 +588,30 @@ int jogo(MAPA *dj) {
       height : QUADRADO
     };
 
-    if (dj->jogador.cooldown_espada > 0)
-      dj->jogador.cooldown_espada -= delta;
-
-
+    if (dj->jogador.cooldown_espada > 0) dj->jogador.cooldown_espada -= delta;
 
     for (i = 0; i < quantidade_inicial_monstros; i++) {
       if (dj->monstros[i].vivo) {
-        if (abs(dj->monstros[i].pos.atual.x - dj->jogador.pos.atual.x) <
-                800 &&
-            abs(dj->monstros[i].pos.atual.y - dj->jogador.pos.atual.y) <
-                800 &&
+        if (abs(dj->monstros[i].pos.atual.x - dj->jogador.pos.atual.x) < 800 &&
+            abs(dj->monstros[i].pos.atual.y - dj->jogador.pos.atual.y) < 800 &&
             cooldownColisao <= 0) {
-          MonstroSegueJogador(&dj->monstros[i].pos,
-                              &dj->monstros[i].direcao, dj->jogador.pos,
-                              delta, dj);
+          MonstroSegueJogador(&dj->monstros[i].pos, &dj->monstros[i].direcao,
+                              dj->jogador.pos, delta, dj);
         } else {
-          AlteraPosicaoDestino(&dj->monstros[i].pos,
-                               &dj->monstros[i].direcao,
+          AlteraPosicaoDestino(&dj->monstros[i].pos, &dj->monstros[i].direcao,
                                GetRandomValue(1, 4), dj);
         }
 
         MovimentaEntidade(&dj->monstros[i].pos, dj->monstros[i].direcao,
                           dj->monstros[i].velocidade, delta);
         DrawTexture(texturas.monstro_texturas[dj->monstros[i].direcao - 1],
-                    dj->monstros[i].pos.atual.x,
-                    dj->monstros[i].pos.atual.y, WHITE);
+                    dj->monstros[i].pos.atual.x, dj->monstros[i].pos.atual.y,
+                    WHITE);
 
         if (CheckCollisionRecs(
-                ret_link, (Rectangle){dj->monstros[i].pos.atual.x,
-                                      dj->monstros[i].pos.atual.y, QUADRADO,
-                                      QUADRADO}) &&
+                ret_link,
+                (Rectangle){dj->monstros[i].pos.atual.x,
+                            dj->monstros[i].pos.atual.y, QUADRADO, QUADRADO}) &&
             cooldownColisao <= 0) {
           dj->jogador.nro_vidas--;
           cooldownColisao = 15;
@@ -580,15 +621,14 @@ int jogo(MAPA *dj) {
           cooldownColisao -= delta;
       }
     }
-    AtaqueEspada(&dj->jogador, &dj->quant_monstros, texturas,
-                 dj->monstros, delta, dj);
+    AtaqueEspada(&dj->jogador, &dj->quant_monstros, texturas, dj->monstros,
+                 delta, dj);
     DrawTexture(texturas.link_texturas[dj->jogador.direcao - 1],
-                  dj->jogador.pos.atual.x, dj->jogador.pos.atual.y,
-                  WHITE);
+                dj->jogador.pos.atual.x, dj->jogador.pos.atual.y, WHITE);
 
     for (int i = 0; i < dj->quant_obstaculos; i++) {
-      DrawTexture(texturas.pedra, dj->obstaculos[i].x,
-                  dj->obstaculos[i].y, WHITE);
+      DrawTexture(texturas.pedra, dj->obstaculos[i].x, dj->obstaculos[i].y,
+                  WHITE);
     }
 
     DrawText(TextFormat("Vidas: %d", dj->jogador.nro_vidas), 100, 50, 20,
@@ -614,7 +654,7 @@ int jogo(MAPA *dj) {
     if (dj->jogador.nro_vidas <= 0) {
       return 0;
     }
-    if(IsKeyPressed(KEY_L)){
+    if (IsKeyPressed(KEY_L)) {
       salvaJogo(dj);
     }
 
@@ -631,6 +671,7 @@ int main() {
   le_arquivo(top5);
 
   IniciaJanela();
+  InitAudioDevice();
   int escolha = 0;
 
   while (escolha != 4) {
@@ -656,7 +697,7 @@ int main() {
         }
       } while (continua);
     }
-    if(escolha == 2){
+    if (escolha == 2) {
       carregaJogo(&dados_jogo);
       do {
         continua = jogo(&dados_jogo);
@@ -674,6 +715,8 @@ int main() {
         }
       } while (continua);
     }
+    if (escolha == 3) mostraRecordes(top5);
   }
+  CloseAudioDevice();
   CloseWindow();
 }
