@@ -59,6 +59,7 @@ typedef struct mapa {
   Rectangle obstaculos[QUANT_MAX_OBSTACULOS];
   int fase;
   int quant_monstros;
+  int quant_inicial_monstros;
   MONSTRO monstros[QUANT_MAX_MONSTROS];
   JOGADOR jogador;
   int pontuacao;
@@ -71,21 +72,24 @@ typedef struct texturas {
   Texture2D pedra;
 } TEXTURA;
 
+/* Inicializa a janela do JOGO com as dimensões definidas, um título, e também
+inicializa o dispositivo de audio */
 void IniciaJanela(void) {
   InitWindow(LARGURA_TELA, ALTURA_TELA, "ZIIL");
+  InitAudioDevice();
   SetTargetFPS(60);
 }
 
+/* Alterna entre janela e tela cheia toda vez que a tecla F11 é pressionada */
 void checaTelaCheia(void) {
   if (IsKeyPressed(KEY_F11)) ToggleFullscreen();
 }
 
-// Recebe o nome do arquivo a ser lido (ler no main) e armazena o
-// conteúdo no array top5
-// Abre e fecha o arquivo dentro desta função
-// Retorna TRUE em caso de sucesso e FALSE no caso contrário
-int le_arquivo(RECORDE top5[5]) {
-  int sucesso = true;
+/* Lê o arquivo top5.bin, que contém as cinco maiores pontuações no jogo, e as
+transfere para uma matriz de estruturas RECORDE. Devolve um booleano indicando
+sucesso ou falha na operação. */
+bool le_arquivo_recordes(RECORDE top5[5]) {
+  bool sucesso = true;
   FILE *fp;
 
   if (!(fp = fopen("assets/top5.bin", "rb"))) {
@@ -102,12 +106,11 @@ int le_arquivo(RECORDE top5[5]) {
   return sucesso;
 }
 
-// Recebe o nome do arquivo a ser escrito e armazena o
-// conteúdo do array top5
-// Abre e fecha o arquivo dentro desta função
-// Retorna TRUE em caso de sucesso e FALSE no caso contrário
-int salva_arquivo(RECORDE top5[5]) {
-  int sucesso = true;
+/* Salva no arquivo top5.bin os recordes que estão atualmente na matriz de
+estruturas RECORDE. Devolve um booleano indicando sucesso ou falha na operação.
+*/
+bool salva_arquivo(RECORDE top5[5]) {
+  bool sucesso = true;
   FILE *fp;
 
   if (!(fp = fopen("assets/top5.bin", "wb"))) {
@@ -124,12 +127,14 @@ int salva_arquivo(RECORDE top5[5]) {
   return sucesso;
 }
 
-// Troca no array as informações do jogador na posição posicao pelas informações
-// do novo jogador novoj
+/* Troca no array de RECORDE as informações do RECORDE na posição posicao pelas
+informações do novo RECORDE novor */
 void troca_info_array(RECORDE top5[], RECORDE novor, int posicao) {
   top5[posicao] = novor;
 }
 
+/* Se há colisão atualmente entre o retângulo que representa o botão do menu e o
+mouse, devolve a cor verde. Senão, devolve a cor marrom. */
 Color defineCorBotaoMenu(Rectangle botao) {
   Color cor;
   if (CheckCollisionPointRec(GetMousePosition(), botao))
@@ -140,6 +145,8 @@ Color defineCorBotaoMenu(Rectangle botao) {
   return cor;
 }
 
+/* Verifica se o retângulo que representa o botão do menu foi clicado com o
+mouse, devolvendo o booleano correspondente */
 bool botaoClicado(Rectangle botao) {
   bool botaoFoiClicado;
 
@@ -152,6 +159,9 @@ bool botaoClicado(Rectangle botao) {
   return botaoFoiClicado;
 }
 
+/* Exibe o menu principal do jogo enquanto toca uma música, retornando um
+inteiro entre 1 e 4 dependendo do botão que foi clicado: 1 - JOGAR, 2 -
+CARREGAR, 3 - RECORDES, 4 - SAIR */
 int menu(void) {
   int escolha = 0;
 
@@ -168,6 +178,7 @@ int menu(void) {
     checaTelaCheia();
     BeginDrawing();
     ClearBackground(PESSEGO);
+    DrawRectangle(LARGURA_TELA, 0, 300, ALTURA_TELA, BLACK);
     DrawTexture(hub, 0, 0, RAYWHITE);
 
     DrawText("JOGAR", botaoJOGAR.x, botaoJOGAR.y, 50,
@@ -206,6 +217,9 @@ int menu(void) {
   return 4;
 }
 
+/* Lê do arquivo binário save.bin a estrutura MAPA, que contém todos os dados de
+um jogo salvo previamente, e sobrescreve a estrutura MAPA do programa. Retorna
+um booleano correspondendo ao sucesso da operação. */
 bool carregaJogo(MAPA *dados) {
   bool sucesso = true;
   FILE *fp;
@@ -224,6 +238,8 @@ bool carregaJogo(MAPA *dados) {
   return sucesso;
 }
 
+/* Grava no arquivo binário save.bin a estrutura MAPA atual do programa, para
+carregar depois. Devolve um booleano informando sucesso ou não. */
 bool salvaJogo(MAPA *dados) {
   bool sucesso = true;
   FILE *fp;
@@ -240,16 +256,23 @@ bool salvaJogo(MAPA *dados) {
   fclose(fp);
   return sucesso;
 }
+
+/* Mostra as 5 melhores pontuações contidas no arquivo top5.bin, com um plano de
+fundo e uma música tocando. Se o botão VOLTAR for pressionado, retorna 0 para
+voltar para o menu.*/
 int mostraRecordes(RECORDE recordes[]) {
   Texture2D hub = LoadTexture("assets/sprites/Menu_Zelda.png");
   char pontos[30];
   Sound tema;
-
+  Rectangle botaoVOLTAR = {80, 210, 165, ALTURA_BOTAO};
   tema = LoadSound("assets/sons/tema.mp3");
-  while (!WindowShouldClose()) {
+  bool botao_nao_clicado = true;
+
+  while (!WindowShouldClose() && botao_nao_clicado) {
     checaTelaCheia();
     BeginDrawing();
     ClearBackground(PESSEGO);
+    DrawRectangle(LARGURA_TELA, 0, 300, ALTURA_TELA, BLACK);
     DrawTexture(hub, 0, 0, RAYWHITE);
 
     DrawText(recordes[0].nome, 80, 150, 30, GOLD);
@@ -271,14 +294,27 @@ int mostraRecordes(RECORDE recordes[]) {
     DrawText(recordes[4].nome, 80, 550, 30, BLUE);
     sprintf(pontos, "%d", recordes[4].pontos);
     DrawText(pontos, 100, 600, 30, BLUE);
+
+    DrawText("VOLTAR", botaoVOLTAR.x, botaoVOLTAR.y, 50,
+             defineCorBotaoMenu(botaoVOLTAR));
+
+    if (botaoClicado(botaoVOLTAR)) {
+      botao_nao_clicado = false;
+    }
+
     if (!IsSoundPlaying(tema)) {
       PlaySound(tema);
     }
+
     EndDrawing();
   }
   StopSound(tema);
+  return 1;
 }
 
+/* Dado um array de MONSTRO, um índice, e uma posição x e y, cria uma estrutura
+MONSTRO naquele índice do array, com os parâmetros determinados e posição no
+mapa correspondente ao x e y informados */
 void inicializaMonstro(MONSTRO monstros[], int indice, int x, int y) {
   monstros[indice] = (MONSTRO){
     pos : {
@@ -291,7 +327,10 @@ void inicializaMonstro(MONSTRO monstros[], int indice, int x, int y) {
   };
 }
 
-void le_arquivo_nivel(char mat[][COLUNAS], int nivel) {
+/* Dada uma matriz de caracteres do mesmo tamanho de linhas e colunas da grade
+do jogo, a preenche a partir de um arquivo texto de caracteres, escolhido
+conforme o nível informado como parâmetro.  */
+void leArquivoNivel(char mat[][COLUNAS], int nivel) {
   FILE *fp;
   int i;
   int j;
@@ -319,14 +358,20 @@ void le_arquivo_nivel(char mat[][COLUNAS], int nivel) {
   }
 }
 
-void monta_mapa(char mat[][COLUNAS], MAPA *dados_jogo) {
+/* Inicializa a estrutura de dados_jogo, conforme a matriz de nível carregada
+ * previamente.*/
+void montaMapa(char mat[][COLUNAS], MAPA *dados_jogo) {
   int i, j;
-  dados_jogo->pontuacao = 0;
   dados_jogo->quant_monstros = 0;
   dados_jogo->quant_obstaculos = 0;
+  dados_jogo->quant_inicial_monstros = 0;
 
   for (i = 0; i < LINHAS; i++)
     for (j = 0; j < COLUNAS; j++) {
+      /* Se o caracter da posição atual da matriz é 'O', de obstáculo,
+      inicializa uma estrutura Rectangle na matriz de obstáculos do MAPA,
+      traduzindo as coordenadas da matriz para o jogo, e aumenta o contador de
+      obstáculos*/
       if (mat[i][j] == 'O') {
         dados_jogo->obstaculos[dados_jogo->quant_obstaculos] = (Rectangle){
           x : j * 50,
@@ -337,12 +382,20 @@ void monta_mapa(char mat[][COLUNAS], MAPA *dados_jogo) {
         dados_jogo->quant_obstaculos++;
       }
 
+      /* Se o caracter da posição atual da matriz é 'M', de monstro, chama a
+      função inicializaMonstro para inicializar um monstro na matriz de MONSTRO,
+      usando como índice o contador de monstros e traduzindo as coordenadas da
+      matriz, incrementando o contador de monstros ao final*/
       else if (mat[i][j] == 'M') {
         inicializaMonstro(dados_jogo->monstros, dados_jogo->quant_monstros,
                           j * 50, i * 50);
         dados_jogo->quant_monstros++;
+        dados_jogo->quant_inicial_monstros++;
       }
 
+      /* Se o caracter da posição atual da matriz é 'P', de player, inicializa a
+      estrutura JOGADOR no campo apropriado do MAPA, traduzindo as coordenadas
+      da matriz*/
       else if (mat[i][j] == 'P') {
         dados_jogo->jogador = (JOGADOR){
           pos : {
@@ -351,7 +404,8 @@ void monta_mapa(char mat[][COLUNAS], MAPA *dados_jogo) {
           },
           velocidade : VELOCIDADE_JOGADOR,
           direcao : S,
-          nro_vidas : 3,
+          nro_vidas :
+              3,  // QUEREMOS RESETAR A QUANTIDADE DE VIDAS EM CADA NÍVEL?
           espada : false,
           cooldown_espada : 0.0
         };
@@ -359,6 +413,7 @@ void monta_mapa(char mat[][COLUNAS], MAPA *dados_jogo) {
     }
 }
 
+/* Carrega as texturas usadas no jogo para dentro da estrutura TEXTURAS */
 void carregaTexturas(TEXTURA *textura) {
   textura->espada[0] = LoadTexture("assets/sprites/Attack_right.png");
   textura->espada[1] = LoadTexture("assets/sprites/Attack_left.png");
@@ -379,20 +434,22 @@ void carregaTexturas(TEXTURA *textura) {
 }
 
 bool MovimentoEhLegal(POSICAO *pos, Vector2 mov, MAPA *dados) {
-  // Dada a estrutura POSI��O (passada por refer�ncia) de uma entidade, e um
-  // Vector2 correspondente ao movimento a ser realizado, retorna Verdadeiro se
-  // o movimento pode ser realizado ou Falso caso contr�rio
+  /* Dada a estrutura POSIÇÃO (passada por referência) de uma entidade, e um
+  Vector2 correspondente ao movimento a ser realizado, retorna Verdadeiro se
+  o movimento pode ser realizado ou Falso caso contrário */
   int i;
 
-  // O movimento � permitido por padr�o,
+  /* O movimento é permitido por padrão, */
   bool permitido = true;
 
-  // exceto se a possivel coordenada de destino do movimento acabar fora da �rea
-  // jog�vel
+  /* exceto se a possivel coordenada de destino do movimento acabar fora da área
+  jogável */
   if (pos->atual.x + mov.x >= LARGURA_TELA || pos->atual.x + mov.x < 0 ||
       pos->atual.y + mov.y >= ALTURA_TELA || pos->atual.y + mov.y < 0) {
     permitido = false;
-  } else {
+  }
+  /*ou se o destino do movimento for a coordenada de um dos obstáculos do MAPA*/
+  else {
     for (i = 0; i < dados->quant_obstaculos; i++) {
       if (CheckCollisionPointRec((Vector2){
             x : (pos->atual.x + mov.x) + 0.1,
@@ -408,16 +465,19 @@ bool MovimentoEhLegal(POSICAO *pos, Vector2 mov, MAPA *dados) {
 
 void AlteraPosicaoDestino(POSICAO *pos, int *direcao_atual,
                           int direcao_movimento, MAPA *dados) {
-  // Dada uma POSICAO e a dire��o atual (passados por refer�ncia), bem como a
-  // dire��o desejada do movimento de uma entidade, analisa a dire��o do
-  // movimento a ser realizado e passa para a fun��o de verifica��o o vetor
-  // desse movimento, alterando a coordenada de destino e a dire��o atual se o
-  // movimento for legal
+  /* Dada uma POSICAO e a direção atual (passados por referência), bem como a
+   direção desejada do movimento de uma entidade, analisa a direção do
+   movimento a ser realizado e passa para a função de verificação o vetor
+   desse movimento e os dados do jogo, alterando a coordenada de destino e a
+   direção atual se o movimento for legal */
 
-  // Se o personagem n�o est� com uma movimenta��o em andamento, ou seja, as
-  // posi��es atuais s�o iguais �s de destino
+  /* Se o personagem não está com uma movimentação em andamento, ou seja, as
+  posições atuais são iguais às de destino */
   if ((pos->atual.x == pos->destino.x) && (pos->atual.y == pos->destino.y)) {
     *direcao_atual = direcao_movimento;
+    /* Altera a posição de destino na direção correspondente, primeiro
+     * verificando através da função MovimentoEhLegal se é um movimento válido.
+     */
     if (direcao_movimento == L &&
         MovimentoEhLegal(pos, (Vector2){x : QUADRADO, y : 0}, dados)) {
       pos->destino.x += QUADRADO;
@@ -435,12 +495,12 @@ void AlteraPosicaoDestino(POSICAO *pos, int *direcao_atual,
 }
 
 void TraduzInputJogador(POSICAO *pos, int *direcao_atual, MAPA *dados) {
-  // Dada a estrutura POSI��O e um caractere de dire��o atual (passados por
-  // refer�ncia) de um jogador, traduz o aperto de uma determinada tecla para
-  // uma a��o do jogo
+  /* Dada a estrutura POSIÇÃO e um inteiro de direção atual (passados por
+  referência) de um jogador, bem como o MAPA do jogo, traduz o aperto de uma
+  determinada tecla para uma ação do jogo */
 
-  // Verifica se alguma tecla de movimenta��o est� pressionada, chama a fun��o
-  // de altera��o de destino com os dados do jogador
+  /* Verifica se alguma tecla de movimentação está pressionada, chama a função
+  de alteração de destino com os dados do jogador */
   if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
     AlteraPosicaoDestino(pos, direcao_atual, L, dados);
   else if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
@@ -449,20 +509,25 @@ void TraduzInputJogador(POSICAO *pos, int *direcao_atual, MAPA *dados) {
     AlteraPosicaoDestino(pos, direcao_atual, S, dados);
   else if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
     AlteraPosicaoDestino(pos, direcao_atual, N, dados);
+
+  /* Se a tecla L for presionada, chama a função de salvamento do jogo */
+  if (IsKeyPressed(KEY_L)) {
+    salvaJogo(dados);
+  }
 }
 
 void MovimentaEntidade(POSICAO *pos, int direcao, float velocidade,
                        float delta) {
-  // Dada a estrutura POSI��O (passada por refer�ncia), um caractere de dire��o
-  // atual e um float de velocidade de uma entidade, bem como um float para o
-  // delta time (tempo passado desde o �ltimo frame), movimenta essa entidade na
-  // tela em dire��o � sua posi��o de destino
+  /* Dada a estrutura POSIÇÃO (passada por referência), um caractere de direção
+  atual e um float de velocidade de uma entidade, bem como um float para o
+  delta time (tempo passado desde o último frame), movimenta essa entidade na
+  tela em direção a sua posição de destino */
 
-  // Se uma das coordenadas da posi��o atual n�o corresponde com a respectiva
-  // coordenada da posi��o destino
+  /* Se uma das coordenadas da posição atual não corresponde com a respectiva
+  coordenada da posição destino */
   if ((pos->atual.x != pos->destino.x) || (pos->atual.y != pos->destino.y)) {
-    // Se a dire��o atual � "X", executa um movimento de 'velocidade' pixels por
-    // segundo nessa dire��o at� alcan�ar a posi��o destino
+    /* Se a direção atual a "X", executa um movimento de 'velocidade' pixels por
+    segundo nessa direção até alcançar a posição destino */
     if (direcao == L) {
       pos->atual.x += velocidade * delta;
       if (pos->atual.x >= pos->destino.x) pos->atual.x = pos->destino.x;
@@ -550,7 +615,6 @@ void MonstroSegueJogador(POSICAO *monstro_pos, int *monstro_direcao,
       newMov.y = 50;
     }
   }
-
   if (MovimentoEhLegal(monstro_pos, newMov, dados)) {
     AlteraPosicaoDestino(monstro_pos, monstro_direcao, direcaoLink, dados);
   } else {
@@ -558,11 +622,50 @@ void MonstroSegueJogador(POSICAO *monstro_pos, int *monstro_direcao,
                          dados);
   }
 }
-
-int jogo(MAPA *dj) {
+void movimentaMonstro(MONSTRO monstros[], JOGADOR jogador, TEXTURA texturas,
+                      int quantidade_inicial_monstros, double cooldownColisao,
+                      double delta, MAPA *dj) {
   int i;
+
+  for (i = 0; i < quantidade_inicial_monstros; i++) {
+    if (monstros[i].vivo) {
+      if (abs(monstros[i].pos.atual.x - jogador.pos.atual.x) < 800 &&
+          abs(monstros[i].pos.atual.y - jogador.pos.atual.y) < 800 &&
+          cooldownColisao <= 0) {
+        MonstroSegueJogador(&monstros[i].pos, &monstros[i].direcao, jogador.pos,
+                            delta, dj);
+      } else {
+        AlteraPosicaoDestino(&monstros[i].pos, &monstros[i].direcao,
+                             GetRandomValue(1, 4), dj);
+      }
+
+      MovimentaEntidade(&monstros[i].pos, monstros[i].direcao,
+                        monstros[i].velocidade, delta);
+      DrawTexture(texturas.monstro_texturas[monstros[i].direcao - 1],
+                  monstros[i].pos.atual.x, monstros[i].pos.atual.y, WHITE);
+    }
+  }
+}
+void checaColisaoMonstroJogador(MONSTRO monstros[], int *nro_vidas,
+                                Rectangle ret_link, double *cooldownColisao,
+                                double delta, int quantidade_inicial_monstros) {
+  int i;
+
+  for (i = 0; i < quantidade_inicial_monstros; i++) {
+    if (CheckCollisionRecs(ret_link, (Rectangle){monstros[i].pos.atual.x,
+                                                 monstros[i].pos.atual.y,
+                                                 QUADRADO, QUADRADO}) &&
+        cooldownColisao <= 0) {
+      *nro_vidas--;
+      cooldownColisao = 15;
+
+      DrawText("Colis�o", 400, 550, 30, PURPLE);
+    } else if (cooldownColisao > 0)
+      *cooldownColisao -= delta;
+  }
+}
+int jogo(MAPA *dj) {
   double cooldownColisao = 0.0;
-  int quantidade_inicial_monstros = dj->quant_monstros;
   TEXTURA texturas;
 
   carregaTexturas(&texturas);
@@ -573,6 +676,7 @@ int jogo(MAPA *dj) {
     checaTelaCheia();
     BeginDrawing();
     ClearBackground((Color){253, 217, 169, 255});
+    DrawRectangle(LARGURA_TELA, 0, 300, ALTURA_TELA, BLACK);
 
     TraduzInputJogador(&dj->jogador.pos, &dj->jogador.direcao, dj);
     MovimentaEntidade(&dj->jogador.pos, dj->jogador.direcao,
@@ -590,37 +694,11 @@ int jogo(MAPA *dj) {
 
     if (dj->jogador.cooldown_espada > 0) dj->jogador.cooldown_espada -= delta;
 
-    for (i = 0; i < quantidade_inicial_monstros; i++) {
-      if (dj->monstros[i].vivo) {
-        if (abs(dj->monstros[i].pos.atual.x - dj->jogador.pos.atual.x) < 800 &&
-            abs(dj->monstros[i].pos.atual.y - dj->jogador.pos.atual.y) < 800 &&
-            cooldownColisao <= 0) {
-          MonstroSegueJogador(&dj->monstros[i].pos, &dj->monstros[i].direcao,
-                              dj->jogador.pos, delta, dj);
-        } else {
-          AlteraPosicaoDestino(&dj->monstros[i].pos, &dj->monstros[i].direcao,
-                               GetRandomValue(1, 4), dj);
-        }
-
-        MovimentaEntidade(&dj->monstros[i].pos, dj->monstros[i].direcao,
-                          dj->monstros[i].velocidade, delta);
-        DrawTexture(texturas.monstro_texturas[dj->monstros[i].direcao - 1],
-                    dj->monstros[i].pos.atual.x, dj->monstros[i].pos.atual.y,
-                    WHITE);
-
-        if (CheckCollisionRecs(
-                ret_link,
-                (Rectangle){dj->monstros[i].pos.atual.x,
-                            dj->monstros[i].pos.atual.y, QUADRADO, QUADRADO}) &&
-            cooldownColisao <= 0) {
-          dj->jogador.nro_vidas--;
-          cooldownColisao = 15;
-
-          DrawText("Colis�o", 400, 550, 30, PURPLE);
-        } else if (cooldownColisao > 0)
-          cooldownColisao -= delta;
-      }
-    }
+    movimentaMonstro(&dj->monstros, dj->jogador, texturas,
+                     dj->quant_inicial_monstros, cooldownColisao, delta, dj);
+    checaColisaoMonstroJogador(dj->monstros, &dj->jogador.nro_vidas, ret_link,
+                               &cooldownColisao, delta,
+                               dj->quant_inicial_monstros);
     AtaqueEspada(&dj->jogador, &dj->quant_monstros, texturas, dj->monstros,
                  delta, dj);
     DrawTexture(texturas.link_texturas[dj->jogador.direcao - 1],
@@ -654,24 +732,47 @@ int jogo(MAPA *dj) {
     if (dj->jogador.nro_vidas <= 0) {
       return 0;
     }
-    if (IsKeyPressed(KEY_L)) {
-      salvaJogo(dj);
-    }
 
     EndDrawing();
   }
 }
 
+/* Dada a pontuação do jogador atual, devolve a posição (de 1 a 5) que ele
+alcançou no top5, ou 6 se ele ficou fora do top5 */
+int ehPontuaçãoRecorde(RECORDE recordes[], int pontuacao) {
+  int i;
+  int posicao = 6;
+
+  for (i = 5; i >= 1; i--) {
+    if (pontuacao > recordes[i - 1].pontos) posicao = i;
+  }
+
+  return posicao;
+}
+
+/* Reorganiza os recordes anteriores e insere o novo recorde na posição
+ * informada */
+void insereRecorde(int posicao, RECORDE atual, RECORDE top5[]) {
+  int i;
+  for (i = 3; i > posicao - 1; i--) {
+    troca_info_array(top5, top5[i], i + 1);
+  }
+  troca_info_array(top5, atual, posicao - 1);
+}
+
 int main() {
   MAPA dados_jogo;
   char grid[LINHAS][COLUNAS];
-  int continua = 1;
+  int resultado = 1;
   RECORDE top5[5];
+  RECORDE atual;
+  int posicao_pontuacao;
 
-  le_arquivo(top5);
+  if (!(le_arquivo_recordes(top5))) {
+    puts("Erro na leitura do arquivo de recordes!");
+  };
 
   IniciaJanela();
-  InitAudioDevice();
   int escolha = 0;
 
   while (escolha != 4) {
@@ -679,44 +780,68 @@ int main() {
 
     if (escolha == 1) {
       dados_jogo.fase = 1;
-      le_arquivo_nivel(grid, dados_jogo.fase);
-      monta_mapa(grid, &dados_jogo);
+      leArquivoNivel(grid, dados_jogo.fase);
+      montaMapa(grid, &dados_jogo);
+      dados_jogo.pontuacao = 0;
       do {
-        continua = jogo(&dados_jogo);
+        resultado = jogo(&dados_jogo);
         if (dados_jogo.fase > NUM_FASES) {
+          if ((posicao_pontuacao =
+                   ehPontuaçãoRecorde(top5, dados_jogo.pontuacao))) {
+            printf("Insira seu nome");
+          }
+          printf("Vitória");
           CloseWindow();
         }
 
-        else if (continua == 1) {
-          le_arquivo_nivel(grid, dados_jogo.fase);
-          monta_mapa(grid, &dados_jogo);
+        else if (resultado == 1) {
+          leArquivoNivel(grid, dados_jogo.fase);
+          montaMapa(grid, &dados_jogo);
         }
 
-        else if (continua == 0) {
+        else if (resultado == 0) {
+          if (posicao_pontuacao =
+                  ehPontuaçãoRecorde(top5, dados_jogo.pontuacao)) {
+            printf("Insira seu nome");
+          }
+          printf("Derrota");
           CloseWindow();
         }
-      } while (continua);
+      } while (resultado);
     }
+
     if (escolha == 2) {
       carregaJogo(&dados_jogo);
       do {
-        continua = jogo(&dados_jogo);
+        resultado = jogo(&dados_jogo);
         if (dados_jogo.fase > NUM_FASES) {
+          if (posicao_pontuacao =
+                  ehPontuaçãoRecorde(top5, dados_jogo.pontuacao)) {
+            printf("Insira seu nome");
+          }
+          printf("Vitória");
           CloseWindow();
         }
 
-        else if (continua == 1) {
-          le_arquivo_nivel(grid, dados_jogo.fase);
-          monta_mapa(grid, &dados_jogo);
+        else if (resultado == 1) {
+          leArquivoNivel(grid, dados_jogo.fase);
+          montaMapa(grid, &dados_jogo);
         }
 
-        else if (continua == 0) {
+        else if (resultado == 0) {
+          if (posicao_pontuacao =
+                  ehPontuaçãoRecorde(top5, dados_jogo.pontuacao)) {
+            printf("Insira seu nome");
+          }
+          printf("Derrota");
           CloseWindow();
         }
-      } while (continua);
+      } while (resultado);
     }
-    if (escolha == 3) mostraRecordes(top5);
+    if (escolha == 3) escolha = mostraRecordes(top5);
   }
   CloseAudioDevice();
   CloseWindow();
+
+  return 0;
 }
