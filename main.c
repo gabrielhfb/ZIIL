@@ -1,3 +1,6 @@
+// Gabriel Henrique Fiszczuk Brandeburski
+// Rodrigo Grilli
+
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,9 +18,10 @@
 #define QUANT_MAX_OBSTACULOS 50
 #define QUANT_MAX_MONSTROS 10
 #define DELAY_ESPADA 0.25
-#define COOLDOWN_ESPADA 2
-#define VELOCIDADE_MONSTRO 100
-#define VELOCIDADE_JOGADOR 145
+#define COOLDOWN_ESPADA 1.75
+#define COOLDOWN_COLISAO 7
+#define VELOCIDADE_MONSTRO 115
+#define VELOCIDADE_JOGADOR 160
 #define LINHAS 16
 #define COLUNAS 24
 #define NUM_FASES 2
@@ -26,6 +30,8 @@
   (Color) { 255, 204, 197, 255 }
 #define MARROM \
   (Color) { 153, 78, 0, 255 }
+#define CIANO \
+  (Color) { 35, 197, 231, 255 }
 
 typedef struct posicao {
   Vector2 atual;
@@ -69,7 +75,15 @@ typedef struct texturas {
   Texture2D espada[4];
   Texture2D monstro_texturas[4];
   Texture2D link_texturas[4];
+  Texture2D link_azul_texturas[4];
   Texture2D pedra;
+  Sound som_espada;
+  Sound som_hit;
+  Sound som_levelup;
+  Sound som_ambiente;
+  Sound som_derrota;
+  Sound som_vitoria;
+
 } TEXTURA;
 
 /* Inicializa a janela do JOGO com as dimensões definidas, um título, e também
@@ -109,16 +123,16 @@ bool le_arquivo_recordes(RECORDE top5[5]) {
 /* Salva no arquivo top5.bin os recordes que estão atualmente na matriz de
 estruturas RECORDE. Devolve um booleano indicando sucesso ou falha na operação.
 */
-bool salva_arquivo(RECORDE top5[5]) {
+bool salva_arquivo(RECORDE top5[]) {
   bool sucesso = true;
   FILE *fp;
 
-  if (!(fp = fopen("assets/top5.bin", "wb"))) {
+  if (!(fp = fopen("assets/top5.bin", "wb+"))) {
     printf("Erro na abertura do arquivo!");
     sucesso = false;
   } else {
-    if (fwrite(&top5, sizeof(RECORDE), 5, fp) != 5) {
-      printf("Erro na escrita");
+    if (fwrite(top5, sizeof(RECORDE), 5, fp) != 5) {
+      printf("Erro na leitura");
       sucesso = false;
     }
   }
@@ -131,6 +145,29 @@ bool salva_arquivo(RECORDE top5[5]) {
 informações do novo RECORDE novor */
 void troca_info_array(RECORDE top5[], RECORDE novor, int posicao) {
   top5[posicao] = novor;
+}
+
+/* Dada a pontuação do jogador atual, devolve a posição (de 1 a 5) que ele
+alcançou no top5, ou 6 se ele ficou fora do top5 */
+int ehPontuaçãoRecorde(RECORDE recordes[], int pontuacao) {
+  int i;
+  int posicao = 6;
+
+  for (i = 5; i >= 1; i--) {
+    if (pontuacao > recordes[i - 1].pontos) posicao = i;
+  }
+
+  return posicao;
+}
+
+/* Reorganiza os recordes anteriores e insere o novo recorde na posição
+ * informada */
+void insereRecorde(int posicao, RECORDE atual, RECORDE top5[]) {
+  int i;
+  for (i = 3; i >= posicao - 1; i--) {
+    troca_info_array(top5, top5[i], i + 1);
+  }
+  troca_info_array(top5, atual, posicao - 1);
 }
 
 /* Se há colisão atualmente entre o retângulo que representa o botão do menu e o
@@ -264,7 +301,7 @@ int mostraRecordes(RECORDE recordes[]) {
   Texture2D hub = LoadTexture("assets/sprites/Menu_Zelda.png");
   char pontos[30];
   Sound tema;
-  Rectangle botaoVOLTAR = {80, 210, 165, ALTURA_BOTAO};
+  Rectangle botaoVOLTAR = {80, 50, 165, ALTURA_BOTAO};
   tema = LoadSound("assets/sons/tema.mp3");
   bool botao_nao_clicado = true;
 
@@ -275,25 +312,25 @@ int mostraRecordes(RECORDE recordes[]) {
     DrawRectangle(LARGURA_TELA, 0, 300, ALTURA_TELA, BLACK);
     DrawTexture(hub, 0, 0, RAYWHITE);
 
-    DrawText(recordes[0].nome, 80, 150, 30, GOLD);
+    DrawText(recordes[0].nome, 100, 100, 30, GOLD);
     sprintf(pontos, "%d", recordes[0].pontos);
-    DrawText(pontos, 100, 200, 30, GOLD);
+    DrawText(pontos, 150, 150, 30, GOLD);
 
-    DrawText(recordes[1].nome, 80, 250, 30, GRAY);
+    DrawText(recordes[1].nome, 100, 200, 30, GRAY);
     sprintf(pontos, "%d", recordes[1].pontos);
-    DrawText(pontos, 100, 300, 30, GRAY);
+    DrawText(pontos, 150, 250, 30, GRAY);
 
-    DrawText(recordes[2].nome, 80, 350, 30, BROWN);
+    DrawText(recordes[2].nome, 100, 300, 30, BROWN);
     sprintf(pontos, "%d", recordes[2].pontos);
-    DrawText(pontos, 100, 400, 30, BROWN);
+    DrawText(pontos, 150, 350, 30, BROWN);
 
-    DrawText(recordes[3].nome, 80, 450, 30, BLUE);
+    DrawText(recordes[3].nome, 100, 400, 30, BLUE);
     sprintf(pontos, "%d", recordes[3].pontos);
-    DrawText(pontos, 100, 500, 30, BLUE);
+    DrawText(pontos, 150, 450, 30, BLUE);
 
-    DrawText(recordes[4].nome, 80, 550, 30, BLUE);
+    DrawText(recordes[4].nome, 100, 500, 30, BLUE);
     sprintf(pontos, "%d", recordes[4].pontos);
-    DrawText(pontos, 100, 600, 30, BLUE);
+    DrawText(pontos, 150, 550, 30, BLUE);
 
     DrawText("VOLTAR", botaoVOLTAR.x, botaoVOLTAR.y, 50,
              defineCorBotaoMenu(botaoVOLTAR));
@@ -404,8 +441,7 @@ void montaMapa(char mat[][COLUNAS], MAPA *dados_jogo) {
           },
           velocidade : VELOCIDADE_JOGADOR,
           direcao : S,
-          nro_vidas :
-              3,  // QUEREMOS RESETAR A QUANTIDADE DE VIDAS EM CADA NÍVEL?
+          nro_vidas : 3,
           espada : false,
           cooldown_espada : 0.0
         };
@@ -430,7 +466,21 @@ void carregaTexturas(TEXTURA *textura) {
   textura->link_texturas[2] = LoadTexture("assets/sprites/Link_front.png");
   textura->link_texturas[3] = LoadTexture("assets/sprites/Link_back.png");
 
+  textura->link_azul_texturas[0] =
+      LoadTexture("assets/sprites/Link_right_blue.png");
+  textura->link_azul_texturas[1] =
+      LoadTexture("assets/sprites/Link_left_blue.png");
+  textura->link_azul_texturas[2] =
+      LoadTexture("assets/sprites/Link_front_blue.png");
+  textura->link_azul_texturas[3] =
+      LoadTexture("assets/sprites/Link_back_blue.png");
+
   textura->pedra = LoadTexture("assets/sprites/Obstacle.png");
+
+  textura->som_espada = LoadSound("assets/sons/espada.mp3");
+  textura->som_hit = LoadSound("assets/sons/hit.mp3");
+  textura->som_ambiente = LoadSound("assets/sons/jogo.mp3");
+  textura->som_levelup = LoadSound("assets/sons/levelup.mp3");
 }
 
 bool MovimentoEhLegal(POSICAO *pos, Vector2 mov, MAPA *dados) {
@@ -556,9 +606,10 @@ void AtaqueEspada(TEXTURA texturas, float delta, MAPA *dados) {
   int posX = dados->jogador.pos.atual.x;
   int posY = dados->jogador.pos.atual.y;
 
-  /* se a tecla espaço for pressionada ou a condição espada estiver
+  /* se a tecla J/espaço for pressionada ou a condição espada estiver
    * ativa */
-  if (IsKeyPressed(KEY_SPACE) || dados->jogador.espada == true) {
+  if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_J) ||
+      dados->jogador.espada == true) {
     /* Se o período de cooldown da espada já passou */
     if (dados->jogador.cooldown_espada <= 0) {
       /* altera as variáveis posX e posY de acordo com a direção que o jogador
@@ -578,6 +629,11 @@ void AtaqueEspada(TEXTURA texturas, float delta, MAPA *dados) {
       Rectangle espada_hitbox = (Rectangle){posX, posY, QUADRADO, QUADRADO};
       DrawTexture(texturas.espada[dados->jogador.direcao - 1], posX, posY,
                   WHITE);
+
+      /* Toca o som da espada */
+      if (!IsSoundPlaying(texturas.som_espada)) {
+        PlaySound(texturas.som_espada);
+      }
 
       /* Verifica monstro a monstro se eles estão na área de colisão da espada.
        * Se sim, troca o estado para morto, diminui o contador de monstros e
@@ -610,234 +666,413 @@ void AtaqueEspada(TEXTURA texturas, float delta, MAPA *dados) {
   }
 }
 
-void MonstroSegueJogador(POSICAO *monstro_pos, int *monstro_direcao,
-                         POSICAO link_pos, float delta, MAPA *dados) {
+/* Dado um monstro e a posição do jogador, o delta time e o MAPA do jogo, altera
+a posição de destino do monstro para tentar se aproximar do jogador */
+void MonstroSegueJogador(MONSTRO *monstro, POSICAO link_pos, float delta,
+                         MAPA *dados) {
   int direcaoLink = 0;
   Vector2 newMov = (Vector2){x : 0, y : 0};
 
-  if (abs(monstro_pos->atual.x - link_pos.atual.x) >
-      abs(monstro_pos->atual.y - link_pos.atual.y)) {
-    if (monstro_pos->atual.x > link_pos.atual.x) {
+  /* Se a diferença de coordenadas x entre o monstro e o jogador é maior do que
+   * a diferença de coordenadas y */
+  if (abs(monstro->pos.atual.x - link_pos.atual.x) >
+      abs(monstro->pos.atual.y - link_pos.atual.y)) {
+    /* Se a coordenada x do monstro é maior do que a coordenada do jogador,
+     * busca fazer um movimento para reduzí-la */
+    if (monstro->pos.atual.x > link_pos.atual.x) {
       direcaoLink = O;
       newMov.x = -50;
-    } else if (monstro_pos->atual.x < link_pos.atual.x) {
+    }
+    /* Senão se a coordenada x do monstro é menor do que a coordenada do
+     * jogador, busca fazer um movimento para aumentá-la */
+    else if (monstro->pos.atual.x < link_pos.atual.x) {
       direcaoLink = L;
       newMov.x = 50;
     }
-  } else {
-    if (monstro_pos->atual.y > link_pos.atual.y) {
+  }
+  /* Senão, */
+  else {
+    /* Se a coordenada y do monstro é maior do que a coordenada do jogador,
+     * busca fazer um movimento para reduzí-la */
+    if (monstro->pos.atual.y > link_pos.atual.y) {
       direcaoLink = N;
       newMov.y = -50;
-    } else if (monstro_pos->atual.y < link_pos.atual.y) {
+    }
+    /* Senão se a coordenada y do monstro é menor do que a coordenada do
+     * jogador, busca fazer um movimento para aumentá-la */
+    else if (monstro->pos.atual.y < link_pos.atual.y) {
       direcaoLink = S;
       newMov.y = 50;
     }
   }
-  if (MovimentoEhLegal(monstro_pos, newMov, dados)) {
-    AlteraPosicaoDestino(monstro_pos, monstro_direcao, direcaoLink, dados);
-  } else {
-    AlteraPosicaoDestino(monstro_pos, monstro_direcao, GetRandomValue(1, 4),
+
+  /* Se o movimento desejado é permitido, chama a função para realizá-lo */
+  if (MovimentoEhLegal(&monstro->pos, newMov, dados)) {
+    AlteraPosicaoDestino(&monstro->pos, &monstro->direcao, direcaoLink, dados);
+  }
+  /* Senão, faz um movimento para uma direção aleatória */
+  else {
+    AlteraPosicaoDestino(&monstro->pos, &monstro->direcao, GetRandomValue(1, 4),
                          dados);
   }
 }
-void movimentaMonstro(MONSTRO monstros[], JOGADOR jogador, TEXTURA texturas,
-                      int quantidade_inicial_monstros, double cooldownColisao,
-                      double delta, MAPA *dj) {
+
+/* Dadas as texturas do jogo, o cooldown da colisão entre monstro e jogador, o
+ * delta time e os dados do jogo, executa a movimentação dos monstros */
+void movimentaMonstro(TEXTURA texturas, double cooldownColisao, double delta,
+                      MAPA *dj) {
   int i;
 
-  for (i = 0; i < quantidade_inicial_monstros; i++) {
-    if (monstros[i].vivo) {
-      if (abs(monstros[i].pos.atual.x - jogador.pos.atual.x) < 800 &&
-          abs(monstros[i].pos.atual.y - jogador.pos.atual.y) < 800 &&
+  /* Para cada um dos monstros */
+  for (i = 0; i < dj->quant_inicial_monstros; i++) {
+    /* Se ele ainda estiver vivo */
+    if (dj->monstros[i].vivo) {
+      /* E se ele estiver a uma distancia de menos de 800 pixels da posição do
+       * jogador e o cooldown para colisão for menor do que zero, calcula o
+       * movimento do monstro em direção ao jogador */
+      if (abs(dj->monstros[i].pos.atual.x - dj->jogador.pos.atual.x) < 800 &&
+          abs(dj->monstros[i].pos.atual.y - dj->jogador.pos.atual.y) < 800 &&
           cooldownColisao <= 0) {
-        MonstroSegueJogador(&monstros[i].pos, &monstros[i].direcao, jogador.pos,
-                            delta, dj);
-      } else {
-        AlteraPosicaoDestino(&monstros[i].pos, &monstros[i].direcao,
+        MonstroSegueJogador(&dj->monstros[i], dj->jogador.pos, delta, dj);
+      }
+      /* Senão, calcula o movimento do monstro numa direção aleatória */
+      else {
+        AlteraPosicaoDestino(&dj->monstros[i].pos, &dj->monstros[i].direcao,
                              GetRandomValue(1, 4), dj);
       }
 
-      MovimentaEntidade(&monstros[i].pos, monstros[i].direcao,
-                        monstros[i].velocidade, delta);
-      DrawTexture(texturas.monstro_texturas[monstros[i].direcao - 1],
-                  monstros[i].pos.atual.x, monstros[i].pos.atual.y, WHITE);
+      /* Executa de fato o movimento do monstro */
+      MovimentaEntidade(&dj->monstros[i].pos, dj->monstros[i].direcao,
+                        dj->monstros[i].velocidade, delta);
+      /* Desenha a textura do monstro na tela */
+      DrawTexture(texturas.monstro_texturas[dj->monstros[i].direcao - 1],
+                  dj->monstros[i].pos.atual.x, dj->monstros[i].pos.atual.y,
+                  WHITE);
     }
   }
 }
-void checaColisaoMonstroJogador(MONSTRO monstros[], int *nro_vidas,
-                                Rectangle ret_link, double *cooldownColisao,
-                                double delta, int quantidade_inicial_monstros) {
-  int i;
 
-  for (i = 0; i < quantidade_inicial_monstros; i++) {
-    if (CheckCollisionRecs(ret_link, (Rectangle){monstros[i].pos.atual.x,
-                                                 monstros[i].pos.atual.y,
-                                                 QUADRADO, QUADRADO}) &&
-        cooldownColisao <= 0) {
-      *nro_vidas--;
-      *cooldownColisao = 15.0;
-
-      DrawText("Colis�o", 400, 550, 30, PURPLE);
-    } else if (cooldownColisao > 0)
-      *cooldownColisao -= delta;
-  }
-}
+/* Função que recebe uma estrutura MAPA de dados e executa a maior parte das
+ * funções do jogo */
 int jogo(MAPA *dj) {
+  int i;
+  float delta;
   double cooldownColisao = 0.0;
   TEXTURA texturas;
+  Rectangle ret_link;
 
+  /* Carrega as principais texturas do jogo */
   carregaTexturas(&texturas);
 
-  // Main game loop
+  /* Loop enquanto a janela do jogo estiver aberta */
   while (!WindowShouldClose()) {
-    float delta = GetFrameTime();
-    checaTelaCheia();
-    BeginDrawing();
-    ClearBackground((Color){253, 217, 169, 255});
-    DrawRectangle(LARGURA_TELA, 0, 300, ALTURA_TELA, BLACK);
+    /* Atualiza variáveis dentro do loop */
+    delta = GetFrameTime();
 
-    TraduzInputJogador(&dj->jogador.pos, &dj->jogador.direcao, dj);
-    MovimentaEntidade(&dj->jogador.pos, dj->jogador.direcao,
-                      dj->jogador.velocidade, delta);
-
-    DrawTexture(texturas.link_texturas[dj->jogador.direcao - 1],
-                dj->jogador.pos.atual.x, dj->jogador.pos.atual.y, WHITE);
-
-    Rectangle ret_link = (Rectangle){
+    ret_link = (Rectangle){
       x : dj->jogador.pos.atual.x,
       y : dj->jogador.pos.atual.y,
       width : QUADRADO,
       height : QUADRADO
     };
 
+    /* Toca música ambiente */
+    if (!IsSoundPlaying(texturas.som_ambiente)) {
+      SetSoundVolume(texturas.som_ambiente, 0.4);
+      PlaySound(texturas.som_ambiente);
+    }
+
+    /* Se o cooldown da espada é maior do que 0, decrementa ele com o tempo
+     * passado entre frames */
     if (dj->jogador.cooldown_espada > 0) dj->jogador.cooldown_espada -= delta;
 
-    movimentaMonstro(dj->monstros, dj->jogador, texturas,
-                     dj->quant_inicial_monstros, cooldownColisao, delta, dj);
-    checaColisaoMonstroJogador(dj->monstros, dj->jogador.nro_vidas, ret_link,
-                               &cooldownColisao, delta,
-                               dj->quant_inicial_monstros);
-    AtaqueEspada(texturas, delta, dj);
-    DrawTexture(texturas.link_texturas[dj->jogador.direcao - 1],
-                dj->jogador.pos.atual.x, dj->jogador.pos.atual.y, WHITE);
+    /* Se o cooldown da colisão é maior do que zero, decrementa ele com o tempo
+     * passado entre frames */
+    if (cooldownColisao > 0) cooldownColisao -= delta;
 
+    /* Busca input para alternar tela cheia */
+    checaTelaCheia();
+
+    /* Procura inputs de movimentação ou salvamento da fase */
+    TraduzInputJogador(&dj->jogador.pos, &dj->jogador.direcao, dj);
+
+    /* Movimenta a posição do jogador se necessário */
+    MovimentaEntidade(&dj->jogador.pos, dj->jogador.direcao,
+                      dj->jogador.velocidade, delta);
+
+    /* Movimenta a posição dos monstros */
+    movimentaMonstro(texturas, cooldownColisao, delta, dj);
+
+    /* Varre o array de monstros para detectar se houve alguma colisão entre
+     * eles e o jogador */
+    for (i = 0; i < dj->quant_inicial_monstros; i++) {
+      if (dj->monstros[i].vivo) {
+        if (CheckCollisionRecs(
+                ret_link,
+                (Rectangle){dj->monstros[i].pos.atual.x,
+                            dj->monstros[i].pos.atual.y, QUADRADO, QUADRADO}) &&
+            cooldownColisao <= 0) {
+          /* Se positivo e o cooldown de colisão não estiver ativo, diminui o
+           * número de vidas do jogador e estabelece o cooldown de colisão */
+          dj->jogador.nro_vidas--;
+          cooldownColisao = COOLDOWN_COLISAO;
+          if (!IsSoundPlaying(texturas.som_hit)) {
+            PlaySound(texturas.som_hit);
+          }
+        }
+      }
+    }
+
+    /* Início do Desenho */
+    BeginDrawing();
+    ClearBackground((Color){253, 217, 169, 255});
+    DrawRectangle(LARGURA_TELA, 0, 300, ALTURA_TELA, BLACK);
+
+    /* Desenha os obstáculos */
     for (int i = 0; i < dj->quant_obstaculos; i++) {
       DrawTexture(texturas.pedra, dj->obstaculos[i].x, dj->obstaculos[i].y,
                   WHITE);
     }
 
-    DrawText(TextFormat("Vidas: %d", dj->jogador.nro_vidas), 100, 50, 20,
-             VIOLET);
-    DrawText(TextFormat("FASE: %d", dj->fase), 100, 70, 20, VIOLET);
-    DrawText(TextFormat("Pontos: %d", dj->pontuacao), 100, 90, 20, VIOLET);
+    /* Desenha o sprite do jogador */
+    DrawTexture(texturas.link_texturas[dj->jogador.direcao - 1],
+                dj->jogador.pos.atual.x, dj->jogador.pos.atual.y, WHITE);
 
-    if (IsKeyDown(KEY_ENTER)) {
-      for (int i = 0; i < dj->quant_obstaculos; i++) {
-        dj->obstaculos[i] = (Rectangle){
-          x : GetRandomValue(0, (LARGURA_TELA - 50) / 50) * 50,
-          y : GetRandomValue(0, (ALTURA_TELA - 50) / 50) * 50,
-          width : 50,
-          height : 50
-        };
-      }
-    }
+    /* Após ser atingido, o sprite do Link fica azul enquanto ele estiver
+     * invunerável */
+    if (cooldownColisao > 0)
+      DrawTexture(texturas.link_azul_texturas[dj->jogador.direcao - 1],
+                  dj->jogador.pos.atual.x, dj->jogador.pos.atual.y, WHITE);
 
+    /* Procura o input de ataque da espada, processa-o e desenha o seu sprite,
+     * se necessário */
+    AtaqueEspada(texturas, delta, dj);
+
+    /* Elementos da bara de status */
+    DrawText(TextFormat("Vidas: %d", dj->jogador.nro_vidas), 10, 0, 25, VIOLET);
+    DrawText(TextFormat("Fase: %d", dj->fase), 140, 0, 25, VIOLET);
+    DrawText(TextFormat("Pontos: %d", dj->pontuacao), 250, 0, 25, VIOLET);
+    DrawText("F11: Fullscreen", 700, 0, 25, VIOLET);
+    DrawText("L: Salvar Jogo", 1000, 0, 25, VIOLET);
+
+    EndDrawing();
+    /* Fim do desenho */
+
+    /* Condições de saída */
+    /* Se todos os monstros foram mortos, sobe de fase e retorna 1 */
     if (dj->quant_monstros <= 0) {
+      PlaySound(texturas.som_levelup);
       dj->fase++;
+      StopSound(texturas.som_ambiente);
       return 1;
     }
+
+    /* Se todas as vidas foram perdidas, retorna 0 */
     if (dj->jogador.nro_vidas <= 0) {
+      StopSound(texturas.som_ambiente);
       return 0;
+    }
+  }
+  StopSound(texturas.som_ambiente);
+  return -1;
+}
+
+/* Recebe uma estrutura RECORDE, abre uma tela com um campo para digitar um
+ * nome, e armazena esse nome na estrutura*/
+int perguntaNome(RECORDE *jogador) {
+  int tecla, i = 0;
+  sprintf(jogador->nome, "                             ");
+
+  while (!WindowShouldClose()) {
+    BeginDrawing();
+    ClearBackground(BLACK);
+
+    DrawText("Insira seu nome ", 385, 250, 50, WHITE);
+    tecla = GetCharPressed();
+    if (tecla != 0) {
+      jogador->nome[i] = tecla;
+      i++;
+    }
+    DrawText(jogador->nome, 385, 500, 50, WHITE);
+
+    EndDrawing();
+
+    if (IsKeyPressed(KEY_ENTER)) return 1;
+  }
+  return 0;
+}
+
+/* Se há colisão atualmente entre o retângulo que representa o botão do menu e o
+mouse, devolve a cor verde. Senão, devolve a cor vermelha. */
+Color defineCorBotaoDerrota(Rectangle botao) {
+  Color cor;
+  if (CheckCollisionPointRec(GetMousePosition(), botao))
+    cor = GREEN;
+  else
+    cor = RED;
+
+  return cor;
+}
+
+/* Abre uma tela de fim de jogo, dando a opção do jogador continuar ou sair. No
+ * primeiro caso, retorna 1, no segundo fecha a janela */
+int gameOver(void) {
+  int escolha = 0;
+  Sound tema = LoadSound("assets/sons/derrota.mp3");
+  Rectangle botaoTENTAR = {330, 610, 565, ALTURA_BOTAO};
+  Rectangle botaoSAIR = {555, 710, 300, ALTURA_BOTAO};
+
+  Texture2D tela = LoadTexture("assets/sprites/Tela_derrota.png");
+
+  PlaySound(tema);
+
+  while (!WindowShouldClose()) {
+    checaTelaCheia();
+    BeginDrawing();
+    ClearBackground(PESSEGO);
+    DrawRectangle(LARGURA_TELA, 0, 300, ALTURA_TELA, BLACK);
+
+    DrawTextureEx(tela, (Vector2){x : 0, y : 0}, 0, 2, RAYWHITE);
+
+    DrawText("VOCÊ PERDEU", 228, 50, 100, RED);
+
+    DrawText("TENTAR NOVAMENTE", botaoTENTAR.x, botaoTENTAR.y, 50,
+             defineCorBotaoDerrota(botaoTENTAR));
+    if (botaoClicado(botaoTENTAR)) {
+      escolha = 1;
+      return escolha;
+    }
+
+    DrawText("SAIR", botaoSAIR.x, botaoSAIR.y, 50,
+             defineCorBotaoDerrota(botaoSAIR));
+    if (botaoClicado(botaoSAIR)) {
+      CloseAudioDevice();
+      CloseWindow();
+    }
+    EndDrawing();
+  }
+  CloseWindow();
+  return 0;
+}
+
+/* Se há colisão atualmente entre o retângulo que representa o botão do menu e o
+mouse, devolve a cor verde. Senão, devolve a cor ciano. */
+Color defineCorBotaoVitoria(Rectangle botao) {
+  Color cor;
+  if (CheckCollisionPointRec(GetMousePosition(), botao))
+    cor = GREEN;
+  else
+    cor = CIANO;
+
+  return cor;
+}
+
+/* Abre uma tela de vitória, dando a opção do jogador continuar ou sair. No
+ * primeiro caso, retorna 1, no segundo fecha a janela */
+int vitoria(void) {
+  int escolha = 0;
+  Rectangle botaoCONTINUAR = {750, 510, 300, ALTURA_BOTAO};
+  Rectangle botaoSAIR = {750, 610, 120, ALTURA_BOTAO};
+  Sound tema = LoadSound("assets/sons/vitoria.mp3");
+  Texture2D tela = LoadTexture("assets/sprites/Tela_vitoria.png");
+
+  while (!WindowShouldClose()) {
+    if (!IsSoundPlaying(tema)) {
+      PlaySound(tema);
+    }
+
+    checaTelaCheia();
+    BeginDrawing();
+    ClearBackground(PESSEGO);
+
+    DrawRectangle(LARGURA_TELA, 0, 300, ALTURA_TELA, BLACK);
+
+    DrawTextureEx(tela, (Vector2){x : 0, y : 0}, 0, 1, RAYWHITE);
+
+    DrawText("PARABÉNS", 340, 50, 100, CIANO);
+
+    DrawText("CONTINUAR", botaoCONTINUAR.x, botaoCONTINUAR.y, 50,
+             defineCorBotaoVitoria(botaoCONTINUAR));
+    if (botaoClicado(botaoCONTINUAR)) {
+      escolha = 1;
+      StopSound(tema);
+      return escolha;
+    }
+
+    DrawText("SAIR", botaoSAIR.x, botaoSAIR.y, 50,
+             defineCorBotaoVitoria(botaoSAIR));
+    if (botaoClicado(botaoSAIR)) {
+      CloseAudioDevice();
+      CloseWindow();
     }
 
     EndDrawing();
   }
+
+  CloseWindow();
+  return escolha;
 }
 
-/* Dada a pontuação do jogador atual, devolve a posição (de 1 a 5) que ele
-alcançou no top5, ou 6 se ele ficou fora do top5 */
-int ehPontuaçãoRecorde(RECORDE recordes[], int pontuacao) {
-  int i;
-  int posicao = 6;
-
-  for (i = 5; i >= 1; i--) {
-    if (pontuacao > recordes[i - 1].pontos) posicao = i;
-  }
-
-  return posicao;
-}
-
-/* Reorganiza os recordes anteriores e insere o novo recorde na posição
- * informada */
-void insereRecorde(int posicao, RECORDE atual, RECORDE top5[]) {
-  int i;
-  for (i = 3; i > posicao - 1; i--) {
-    troca_info_array(top5, top5[i], i + 1);
-  }
-  troca_info_array(top5, atual, posicao - 1);
-}
-
-int main() {
+/* Função principal */
+int main(void) {
   MAPA dados_jogo;
   char grid[LINHAS][COLUNAS];
   int resultado = 1;
+  int escolha = 0;
   RECORDE top5[5];
   RECORDE atual;
   int posicao_pontuacao;
 
+  /* Lê o arquivo de recordes e armazena no vetor top5 */
   if (!(le_arquivo_recordes(top5))) {
     puts("Erro na leitura do arquivo de recordes!");
   };
 
   IniciaJanela();
-  int escolha = 0;
 
+  /* Enquanto a escolha não for sair (4) */
   while (escolha != 4) {
+    /* Carrega o menu e atribui o valor devolvido a 'escolha' */
     escolha = menu();
 
+    /* JOGAR */
     if (escolha == 1) {
+      /* Coloca a fase atual como 1, lê o arquivo correspondente, monta o mapa e
+       * zera a pontuação */
       dados_jogo.fase = 1;
       leArquivoNivel(grid, dados_jogo.fase);
       montaMapa(grid, &dados_jogo);
       dados_jogo.pontuacao = 0;
-      do {
-        resultado = jogo(&dados_jogo);
-        if (dados_jogo.fase > NUM_FASES) {
-          if ((posicao_pontuacao =
-                   ehPontuaçãoRecorde(top5, dados_jogo.pontuacao))) {
-            printf("Insira seu nome");
-          }
-          printf("Vitória");
-          CloseWindow();
-        }
-
-        else if (resultado == 1) {
-          leArquivoNivel(grid, dados_jogo.fase);
-          montaMapa(grid, &dados_jogo);
-        }
-
-        else if (resultado == 0) {
-          if ((posicao_pontuacao =
-                   ehPontuaçãoRecorde(top5, dados_jogo.pontuacao))) {
-            printf("Insira seu nome");
-          }
-          printf("Derrota");
-          CloseWindow();
-        }
-      } while (resultado);
     }
 
+    /* CARREGAR */
     if (escolha == 2) {
+      /* Carrega a estrutura MAPA de um arquivo binário e sobrescreve os dados
+       * do jogo atuais */
       carregaJogo(&dados_jogo);
+    }
+
+    /* JOGAR/CARREGAR */
+    if (escolha == 1 || escolha == 2) {
       do {
+        /* Inicializa o jogo e atribui o valor retornado a 'resultado' */
         resultado = jogo(&dados_jogo);
+
+        /* Se a fase atual é superior à fase máxima, */
         if (dados_jogo.fase > NUM_FASES) {
-          if ((posicao_pontuacao =
-                   ehPontuaçãoRecorde(top5, dados_jogo.pontuacao))) {
-            printf("Insira seu nome");
+          /* Verifica se a pontuação atual é superior para entrar no top 5 */
+          posicao_pontuacao = ehPontuaçãoRecorde(top5, dados_jogo.pontuacao);
+          /* Se sim, coloca a pontuação na posição correta */
+          if (posicao_pontuacao < 6) {
+            perguntaNome(&atual);
+            atual.pontos = dados_jogo.pontuacao;
+            insereRecorde(posicao_pontuacao, atual, top5);
+            salva_arquivo(top5);
           }
-          printf("Vitória");
-          CloseWindow();
+          /* Chama a função da tela de vitória e coloca o resultado em 'escolha'
+           */
+          resultado = -1;
+          escolha = vitoria();
         }
 
         else if (resultado == 1) {
@@ -846,15 +1081,25 @@ int main() {
         }
 
         else if (resultado == 0) {
+          /* Verifica se a pontuação atual é superior para entrar no top 5 */
           if ((posicao_pontuacao =
-                   ehPontuaçãoRecorde(top5, dados_jogo.pontuacao))) {
-            printf("Insira seu nome");
+                   ehPontuaçãoRecorde(top5, dados_jogo.pontuacao)) < 6) {
+            /* Se sim, coloca a pontuação na posição correta */
+            perguntaNome(&atual);
+            atual.pontos = dados_jogo.pontuacao;
+            insereRecorde(posicao_pontuacao, atual, top5);
+            salva_arquivo(top5);
           }
-          printf("Derrota");
-          CloseWindow();
+          /* Chama a função da tela de fim de jogo e coloca o resultado em
+           * 'escolha'
+           */
+          escolha = gameOver();
         }
-      } while (resultado);
+      } while (resultado == 1);
+      /* Repete esse loop enquanto o resultado for 1, ou seja, o jogador avançou
+       * de fase */
     }
+    /* MOSTRA RECORDES */
     if (escolha == 3) escolha = mostraRecordes(top5);
   }
   CloseAudioDevice();
@@ -862,3 +1107,6 @@ int main() {
 
   return 0;
 }
+
+// Rodrigo Grilli
+// Gabriel Henrique Fiszczuk Brandeburski
